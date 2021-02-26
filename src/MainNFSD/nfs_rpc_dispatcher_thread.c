@@ -966,18 +966,28 @@ static void Allocate_sockets(void)
 					       SOCK_STREAM,
 					       IPPROTO_TCP);
 
-			/* We fail with LogFatal here on error because it
-			 * shouldn't be that we have managed to create a
-			 * V6 based udp socket and have failed for the tcp
-			 * sock. If it were a case of V6 being disabled,
+			/* We fail with LogFatal here if we already checked
+			 * ipv6 udp support since we shouldn't have been able
+			 * to create a V6 based udp socket and then fail for
+			 * the tcp socket. If it were a case of V6 being disabled,
 			 * then we would have encountered that case with
 			 * the first udp sock create and would have moved
 			 * on to create the V4 sockets.
 			 */
-			if (tcp_socket[p] == -1)
-				LogFatal(COMPONENT_DISPATCH,
-					 "Cannot allocate a tcp socket for %s, error %d(%s)",
-					 tags[p], errno, strerror(errno));
+			if (tcp_socket[p] == -1) {
+                if (nfs_param.core_param.enable_UDP) {
+                    LogFatal(COMPONENT_DISPATCH,
+                         "Cannot allocate a tcp socket for %s, error %d(%s)",
+                         tags[p], errno, strerror(errno));
+                }
+
+                if (errno == EAFNOSUPPORT) {
+                    v6disabled = true;
+                    LogWarn(COMPONENT_DISPATCH,
+                        "System may not have V6 intfs configured error %d(%s)",
+                        errno, strerror(errno));
+                }
+			}
 
 try_V4:
 			if (v6disabled) {
