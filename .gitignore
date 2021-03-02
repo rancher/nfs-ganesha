@@ -12,6 +12,7 @@ src/docker/
 .libs/
 CMakeFiles/
 build/
+.idea/
 
 # files
 *.kdevelop*
