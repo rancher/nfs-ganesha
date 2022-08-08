@@ -1468,6 +1468,13 @@ check_symbol_exists(urcu_ref_get_unless_zero urcu/ref.h HAVE_URCU_REF_GET_UNLESS
 set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE)
 check_symbol_exists(copy_file_range unistd.h HAVE_COPY_FILE_RANGE)
 unset(CMAKE_REQUIRED_DEFINITIONS)
+
+find_path(LIBCURL_INC curl/curl.h)
+find_library(LIBCURL_LIB curl)
+
+find_path(LIBJSONC_INC json/json.h)
+FIND_LIBRARY(LIBJSONC_LIB json-c json)
+
 # All the plumbing in the basement
 set(SYSTEM_LIBRARIES
   ${NTIRPC_LIBRARY}
@@ -1476,6 +1483,8 @@ set(SYSTEM_LIBRARIES
   ${KRB5_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${LIBURCU_LIB}
+  ${LIBCURL_LIB}
+  ${LIBJSONC_LIB}
 )
 
 include_directories(${LIBURCU_INC})
