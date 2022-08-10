@@ -334,6 +334,7 @@ static struct config_item_list recovery_backend_types[] = {
 	CONFIG_LIST_TOK("rados_kv",		RECOVERY_BACKEND_RADOS_KV),
 	CONFIG_LIST_TOK("rados_ng",		RECOVERY_BACKEND_RADOS_NG),
 	CONFIG_LIST_TOK("rados_cluster",	RECOVERY_BACKEND_RADOS_CLUSTER),
+	CONFIG_LIST_TOK("longhorn",		RECOVERY_BACKEND_LONGHORN),
 	CONFIG_LIST_EOL
 };
 
