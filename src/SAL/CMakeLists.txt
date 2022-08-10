@@ -38,6 +38,7 @@ SET(sal_STAT_SRCS
    nfs4_owner.c
    recovery/recovery_fs.c
    recovery/recovery_fs_ng.c
+   recovery/recovery_longhorn.c
 )
 
 if(USE_NLM)
