@@ -1333,6 +1333,8 @@ const char *recovery_backend_str(enum recovery_backend recovery_backend)
 		return "rados_cluster";
 	case RECOVERY_BACKEND_NONE:
 		return "none";
+	case RECOVERY_BACKEND_LONGHORN:
+		return "longhorn";
 	}
 
 	return "Unknown recovery backend";
@@ -1359,6 +1361,9 @@ int nfs4_recovery_init(void)
 		break;
 	case RECOVERY_BACKEND_NONE:
 		fs_no_recovery_backend_init(&recovery_backend);
+		break;
+	case RECOVERY_BACKEND_LONGHORN:
+		longhorn_backend_init(&recovery_backend);
 		break;
 #ifdef USE_RADOS_RECOV
 	case RECOVERY_BACKEND_RADOS_KV:
@@ -1660,6 +1665,7 @@ int load_recovery_param_from_conf(config_file_t parse_tree,
 	case RECOVERY_BACKEND_FS:
 	case RECOVERY_BACKEND_FS_NG:
 	case RECOVERY_BACKEND_NONE:
+	case RECOVERY_BACKEND_LONGHORN:
 		return 0;
 
 	case RECOVERY_BACKEND_RADOS_KV:
