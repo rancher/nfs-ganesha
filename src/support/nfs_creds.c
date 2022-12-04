@@ -319,6 +319,101 @@ static void rpcsec_gss_fetch_managed_groups(char *principal)
 }
 #endif
 
+static void squash_creds(const char *auth_label)
+{
+	unsigned int i;
+	gid_t **garray_copy = &op_ctx->caller_garray_copy;
+
+	/****************************************************************/
+	/* Now check for anon creds or id squashing			*/
+	/****************************************************************/
+	if ((op_ctx->cred_flags & CREDS_ANON) != 0 ||
+	    ((op_ctx->export_perms.options & EXPORT_OPTION_ALL_ANONYMOUS) !=
+	     0) ||
+	    ((op_ctx->export_perms.options & EXPORT_OPTION_ROOT_SQUASH) != 0 &&
+	     op_ctx->fsal_export->exp_ops.is_superuser(
+		     op_ctx->fsal_export, &op_ctx->original_creds))) {
+		/* Squash uid, gid, and discard groups */
+		op_ctx->creds.caller_uid = op_ctx->export_perms.anonymous_uid;
+		op_ctx->creds.caller_gid = op_ctx->export_perms.anonymous_gid;
+		op_ctx->creds.caller_glen = 0;
+		LogMidDebugAlt(COMPONENT_DISPATCH, COMPONENT_EXPORT,
+			       "%s creds squashed to uid=%u, gid=%u",
+			       auth_label, op_ctx->creds.caller_uid,
+			       op_ctx->creds.caller_gid);
+		op_ctx->cred_flags |= UID_SQUASHED | GID_SQUASHED;
+		return;
+	} else if ((op_ctx->export_perms.options &
+		    EXPORT_OPTION_ROOT_ID_SQUASH) != 0 &&
+		   op_ctx->fsal_export->exp_ops.is_superuser(
+			   op_ctx->fsal_export, &op_ctx->original_creds)) {
+		/* Only squash root id, leave gid and groups alone for now */
+		op_ctx->creds.caller_uid = op_ctx->export_perms.anonymous_uid;
+		op_ctx->cred_flags |= UID_SQUASHED;
+	} else {
+		/* Use original_creds uid */
+		op_ctx->creds.caller_uid = op_ctx->original_creds.caller_uid;
+	}
+
+	/****************************************************************/
+	/* Now sqush group or use original_creds gid			*/
+	/****************************************************************/
+	if (((op_ctx->export_perms.options & EXPORT_OPTION_ROOT_SQUASH) != 0 ||
+	     (op_ctx->export_perms.options & EXPORT_OPTION_ROOT_ID_SQUASH) !=
+		     0) &&
+	    op_ctx->original_creds.caller_gid == 0) {
+		/* Squash gid */
+		op_ctx->creds.caller_gid = op_ctx->export_perms.anonymous_gid;
+		op_ctx->cred_flags |= GID_SQUASHED;
+	} else {
+		/* Use original_creds gid */
+		op_ctx->creds.caller_gid = op_ctx->original_creds.caller_gid;
+	}
+
+	/****************************************************************/
+	/* Check the garray for gid 0 to squash				*/
+	/****************************************************************/
+
+	/* If no root squashing in caller_garray, return now */
+	if ((op_ctx->export_perms.options & EXPORT_OPTION_SQUASH_TYPES) == 0 ||
+	    op_ctx->creds.caller_glen == 0)
+		return;
+
+	if (op_ctx->cred_flags & MANAGED_GIDS)
+		garray_copy = &op_ctx->managed_garray_copy;
+
+	for (i = 0; i < op_ctx->creds.caller_glen; i++) {
+		if (op_ctx->creds.caller_garray[i] == 0) {
+			/* Meed to make a copy, or use the old copy */
+			if ((*garray_copy) == NULL) {
+				/* Make a copy of the active garray */
+				(*garray_copy) =
+					gsh_malloc(op_ctx->creds.caller_glen *
+						   sizeof(gid_t));
+
+				memcpy((*garray_copy),
+				       op_ctx->creds.caller_garray,
+				       op_ctx->creds.caller_glen *
+					       sizeof(gid_t));
+			}
+
+			/* Now squash the root id. Since the original copy is
+			 * always the same, any root ids in it were still in
+			 * the same place, so even if using a copy that had a
+			 * different anonymous_gid, we're fine.
+			 */
+			(*garray_copy)[i] = op_ctx->export_perms.anonymous_gid;
+
+			/* Indicate we squashed the caller_garray */
+			op_ctx->cred_flags |= GARRAY_SQUASHED;
+		}
+	}
+
+	/* If we squashed the caller_garray, use the squashed copy */
+	if ((op_ctx->cred_flags & GARRAY_SQUASHED) != 0)
+		op_ctx->creds.caller_garray = *garray_copy;
+}
+
 /**
  * @brief Get numeric credentials from request
  *
@@ -334,9 +429,7 @@ static void rpcsec_gss_fetch_managed_groups(char *principal)
  */
 nfsstat4 nfs_req_creds(struct svc_req *req)
 {
-	unsigned int i;
 	const char *auth_label = "UNKNOWN";
-	gid_t **garray_copy = &op_ctx->caller_garray_copy;
 #ifdef _HAVE_GSSAPI
 	struct svc_rpc_gss_data *gd = NULL;
 	char principal[MAXNAMLEN + 1];
@@ -375,7 +468,6 @@ nfsstat4 nfs_req_creds(struct svc_req *req)
 		if ((op_ctx->export_perms.options &
 		     EXPORT_OPTION_MANAGE_GIDS) != 0) {
 			op_ctx->cred_flags |= MANAGED_GIDS;
-			garray_copy = &op_ctx->managed_garray_copy;
 		}
 
 		auth_label = "AUTH_SYS";
@@ -428,7 +520,6 @@ nfsstat4 nfs_req_creds(struct svc_req *req)
 
 		op_ctx->cred_flags |= CREDS_LOADED | MANAGED_GIDS;
 		auth_label = "RPCSEC_GSS";
-		garray_copy = &op_ctx->managed_garray_copy;
 		/* Fetch extended groups */
 		rpcsec_gss_fetch_managed_groups(principal);
 		break;
@@ -448,94 +539,7 @@ nfsstat4 nfs_req_creds(struct svc_req *req)
 	}
 
 	set_extended_groups();
-
-	/****************************************************************/
-	/* Now check for anon creds or id squashing			*/
-	/****************************************************************/
-	if ((op_ctx->cred_flags & CREDS_ANON) != 0 ||
-	    ((op_ctx->export_perms.options & EXPORT_OPTION_ALL_ANONYMOUS) !=
-	     0) ||
-	    ((op_ctx->export_perms.options & EXPORT_OPTION_ROOT_SQUASH) != 0 &&
-	     op_ctx->fsal_export->exp_ops.is_superuser(
-		     op_ctx->fsal_export, &op_ctx->original_creds))) {
-		/* Squash uid, gid, and discard groups */
-		op_ctx->creds.caller_uid = op_ctx->export_perms.anonymous_uid;
-		op_ctx->creds.caller_gid = op_ctx->export_perms.anonymous_gid;
-		op_ctx->creds.caller_glen = 0;
-		LogMidDebugAlt(COMPONENT_DISPATCH, COMPONENT_EXPORT,
-			       "%s creds squashed to uid=%u, gid=%u",
-			       auth_label, op_ctx->creds.caller_uid,
-			       op_ctx->creds.caller_gid);
-		op_ctx->cred_flags |= UID_SQUASHED | GID_SQUASHED;
-		return NFS4_OK;
-	} else if ((op_ctx->export_perms.options &
-		    EXPORT_OPTION_ROOT_ID_SQUASH) != 0 &&
-		   op_ctx->fsal_export->exp_ops.is_superuser(
-			   op_ctx->fsal_export, &op_ctx->original_creds)) {
-		/* Only squash root id, leave gid and groups alone for now */
-		op_ctx->creds.caller_uid = op_ctx->export_perms.anonymous_uid;
-		op_ctx->cred_flags |= UID_SQUASHED;
-	} else {
-		/* Use original_creds uid */
-		op_ctx->creds.caller_uid = op_ctx->original_creds.caller_uid;
-	}
-
-	/****************************************************************/
-	/* Now sqush group or use original_creds gid			*/
-	/****************************************************************/
-	if (((op_ctx->export_perms.options & EXPORT_OPTION_ROOT_SQUASH) != 0 ||
-	     (op_ctx->export_perms.options & EXPORT_OPTION_ROOT_ID_SQUASH) !=
-		     0) &&
-	    op_ctx->original_creds.caller_gid == 0) {
-		/* Squash gid */
-		op_ctx->creds.caller_gid = op_ctx->export_perms.anonymous_gid;
-		op_ctx->cred_flags |= GID_SQUASHED;
-	} else {
-		/* Use original_creds gid */
-		op_ctx->creds.caller_gid = op_ctx->original_creds.caller_gid;
-	}
-
-	/****************************************************************/
-	/* Check the garray for gid 0 to squash				*/
-	/****************************************************************/
-
-	/* If no root squashing in caller_garray, return now */
-	if ((op_ctx->export_perms.options & EXPORT_OPTION_SQUASH_TYPES) == 0 ||
-	    op_ctx->creds.caller_glen == 0)
-		goto out;
-
-	for (i = 0; i < op_ctx->creds.caller_glen; i++) {
-		if (op_ctx->creds.caller_garray[i] == 0) {
-			/* Meed to make a copy, or use the old copy */
-			if ((*garray_copy) == NULL) {
-				/* Make a copy of the active garray */
-				(*garray_copy) =
-					gsh_malloc(op_ctx->creds.caller_glen *
-						   sizeof(gid_t));
-
-				memcpy((*garray_copy),
-				       op_ctx->creds.caller_garray,
-				       op_ctx->creds.caller_glen *
-					       sizeof(gid_t));
-			}
-
-			/* Now squash the root id. Since the original copy is
-			 * always the same, any root ids in it were still in
-			 * the same place, so even if using a copy that had a
-			 * different anonymous_gid, we're fine.
-			 */
-			(*garray_copy)[i] = op_ctx->export_perms.anonymous_gid;
-
-			/* Indicate we squashed the caller_garray */
-			op_ctx->cred_flags |= GARRAY_SQUASHED;
-		}
-	}
-
-	/* If we squashed the caller_garray, use the squashed copy */
-	if ((op_ctx->cred_flags & GARRAY_SQUASHED) != 0)
-		op_ctx->creds.caller_garray = *garray_copy;
-
-out:
+	squash_creds(auth_label);
 
 	LogMidDebugAlt(
 		COMPONENT_DISPATCH, COMPONENT_EXPORT,
