@@ -375,7 +375,8 @@ static fattr_xdr_result encode_supported_attrs(XDR *xdr,
 		LogAttrlist(COMPONENT_NFS_V4, NIV_FULL_DEBUG, "attrs ",
 			    args->attrs, false);
 		if (atrib_supported(attr, args->attrs->supported)) {
-			bool res = set_attribute_in_bitmap(&bits, attr);
+			bool __attribute__((unused)) res =
+				set_attribute_in_bitmap(&bits, attr);
 
 			assert(res);
 		}
@@ -2507,7 +2508,7 @@ encode_support_exclusive_create(XDR *xdr, struct xdr_attrs_args *args)
 {
 	struct bitmap4 bits;
 	int attr, offset;
-	bool res;
+	bool __attribute__((unused)) res;
 
 	memset(&bits, 0, sizeof(bits));
 	for (attr = FATTR4_SUPPORTED_ATTRS; attr <= FATTR4_MAX_ATTR_INDEX;
@@ -3581,8 +3582,9 @@ bool xdr_fattr4_encode(XDR *xdrs, struct xdr_attrs_args *args,
 		       args->data->current_obj != NULL) &&
 		      (attribute_to_set != FATTR4_FS_LAYOUT_TYPES) &&
 		      (attribute_to_set != FATTR4_LAYOUT_BLKSIZE)))) {
-			bool res = set_attribute_in_bitmap(bitmap,
-							   attribute_to_set);
+			bool __attribute__((unused)) res =
+				set_attribute_in_bitmap(bitmap,
+							attribute_to_set);
 			assert(res);
 			continue;
 		}

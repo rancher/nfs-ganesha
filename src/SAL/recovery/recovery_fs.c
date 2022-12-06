@@ -889,7 +889,7 @@ void fs_add_revoke_fh(nfs_client_id_t *delr_clid, nfs_fh4 *delr_handle)
 	char path[PATH_MAX] = { 0 };
 	int length, position = 0, pathpos, rhdlstr_len;
 	int fd;
-	int retval;
+	int __attribute__((unused)) retval;
 
 	/* Convert nfs_fh4_val into base64 encoded string */
 	retval = base64url_encode(delr_handle->nfs_fh4_val,

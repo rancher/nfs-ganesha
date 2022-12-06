@@ -215,9 +215,8 @@ out:
 
 void put_gsh_client(struct gsh_client *client)
 {
-	int64_t new_refcnt;
-
-	new_refcnt = atomic_dec_int64_t(&client->refcnt);
+	int64_t __attribute__((unused)) new_refcnt =
+		atomic_dec_int64_t(&client->refcnt);
 	assert(new_refcnt >= 0);
 }
 

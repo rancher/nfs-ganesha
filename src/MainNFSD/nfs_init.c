@@ -953,7 +953,7 @@ static void nfs_Start_threads(void)
 
 int nfsv4_init_params(void)
 {
-	int rc;
+	int __attribute__((unused)) rc;
 	int owner_len, scope_len, ss_suffix_len;
 	char *cid_server_scope_suffix = "_NFS-Ganesha";
 

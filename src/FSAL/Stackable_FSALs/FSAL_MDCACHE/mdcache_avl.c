@@ -74,7 +74,7 @@ avltree_inline_lookup_hk(const struct avltree_node *key,
 
 void avl_dirent_set_deleted(mdcache_entry_t *entry, mdcache_dir_entry_t *v)
 {
-	struct avltree_node *node;
+	struct avltree_node __attribute__((unused)) * node;
 	mdcache_dir_entry_t *next;
 
 	LogFullDebugAlt(COMPONENT_NFS_READDIR, COMPONENT_MDCACHE,

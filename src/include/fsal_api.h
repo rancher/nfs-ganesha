@@ -3180,7 +3180,8 @@ static inline void export_root_object_get(struct fsal_obj_handle *obj_hdl)
  */
 static inline void export_root_object_put(struct fsal_obj_handle *obj_hdl)
 {
-	int32_t ref = atomic_dec_int32_t(&obj_hdl->exp_refcnt);
+	int32_t __attribute__((unused)) ref =
+		atomic_dec_int32_t(&obj_hdl->exp_refcnt);
 
 	assert(ref >= 0);
 }

@@ -195,7 +195,7 @@ void nfs_put_grace_status(void)
  */
 static void nfs_lift_grace_locked(void)
 {
-	uint32_t cur;
+	uint32_t __attribute__((unused)) cur;
 
 	/*
 	 * Caller must hold grace_mutex. Only the thread that actually sets
@@ -899,7 +899,7 @@ bool nfs4_check_deleg_reclaim(nfs_client_id_t *clid, nfs_fh4 *fhandle)
 	struct glist_head *node;
 	rdel_fh_t *rfh_entry;
 	clid_entry_t *clid_ent;
-	int b64ret;
+	int __attribute__((unused)) b64ret;
 	bool retval = true;
 
 	/* Convert nfs_fh4_val into base64 encoded string */

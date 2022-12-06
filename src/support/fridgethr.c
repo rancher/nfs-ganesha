@@ -458,7 +458,7 @@ static void *fridgethr_start_routine(void *arg)
 	struct fridgethr_entry *fe = arg;
 	struct fridgethr *fr = fe->fr;
 	bool reschedule;
-	int rc = 0;
+	int __attribute__((unused)) rc = 0;
 	int old_type = 0;
 	int old_state = 0;
 
