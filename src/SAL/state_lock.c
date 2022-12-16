@@ -1323,6 +1323,7 @@ void free_cookie(state_cookie_entry_t *cookie_entry, bool unblock)
 			lock_entry->sle_block_data->sbd_blocked_cookie = NULL;
 
 		lock_entry_dec_ref(lock_entry);
+		cookie_entry->sce_obj->obj_ops->put_ref(cookie_entry->sce_obj);
 	}
 
 	/* Free the memory for the cookie and the cookie entry */
@@ -1463,6 +1464,7 @@ state_status_t state_add_grant_cookie(struct fsal_obj_handle *obj,
 
 	if (status != STATE_SUCCESS) {
 		struct gsh_buffdesc buffused_key;
+		hash_error_t err;
 
 		/* Lock will be returned to right blocking type if it is
 		 * still blocking. We could lose a block if we failed for
@@ -1482,8 +1484,14 @@ state_status_t state_add_grant_cookie(struct fsal_obj_handle *obj,
 		LogEntry("Entry", lock_entry);
 
 		/* Remove the hashtable entry */
-		HashTable_Del(ht_lock_cookies, &buffkey, &buffused_key,
-			      &buffval);
+		err = HashTable_Del(ht_lock_cookies, &buffkey, &buffused_key,
+				    &buffval);
+
+		if (err != HASHTABLE_SUCCESS) {
+			LogCrit(COMPONENT_STATE,
+				 "Failure to delete lock cookie %s",
+				 hash_table_err_to_str(err));
+		}
 
 		/* And release the cookie without unblocking the lock.
 		 * grant_blocked_locks() will decide whether to keep or
@@ -1498,6 +1506,9 @@ state_status_t state_add_grant_cookie(struct fsal_obj_handle *obj,
 	lock_entry_inc_ref(lock_entry);
 	lock_entry->sle_block_data->sbd_blocked_cookie = hash_entry;
 	*cookie_entry = hash_entry;
+
+	/* Also take an obj reference. */
+	obj->obj_ops->get_ref(obj);
 	return status;
 }
 
@@ -1660,11 +1671,12 @@ void state_complete_grant(state_cookie_entry_t *cookie_entry)
 	lock_entry = cookie_entry->sce_lock_entry;
 	obj = cookie_entry->sce_obj;
 
-	/* This routine does not call obj->obj_ops->get_ref() because there
-	 * MUST be at least one lock present for there to be a cookie_entry
-	 * to even allow this routine to be called, and therefor the cache
-	 * entry MUST be protected from being recycled.
+	/* Call obj->obj_ops->get_ref() because even though there MUST be at
+	 * least one lock present for there to be a cookie_entry to even allow
+	 * this routine to be called, that may be cleaned up by free_cookie
+	 * and thus before we release the state lock.
 	 */
+	obj->obj_ops->get_ref(obj);
 
 	STATELOCK_lock(obj);
 
@@ -1690,6 +1702,9 @@ void state_complete_grant(state_cookie_entry_t *cookie_entry)
 	free_cookie(cookie_entry, true);
 
 	STATELOCK_unlock(obj);
+
+	/* Release the obj reference taken above. */
+	obj->obj_ops->put_ref(obj);
 }
 
 /**
@@ -1774,12 +1789,15 @@ void process_blocked_lock_upcall(state_block_data_t *block_data)
 {
 	state_lock_entry_t *lock_entry = block_data->sbd_lock_entry;
 
-	lock_entry_inc_ref(lock_entry);
+	/* A lock entry reference was taken when this work was scheduled. */
+
 	STATELOCK_lock(lock_entry->sle_obj);
 
 	try_to_grant_lock(lock_entry);
 
 	STATELOCK_unlock(lock_entry->sle_obj);
+
+	/* We are done with the lock_entry, release the reference now. */
 	lock_entry_dec_ref(lock_entry);
 }
 
@@ -1980,7 +1998,6 @@ state_status_t state_release_grant(state_cookie_entry_t *cookie_entry)
 	state_lock_entry_t *lock_entry;
 	struct fsal_obj_handle *obj;
 	state_status_t status = STATE_SUCCESS;
-	bool release;
 
 	lock_entry = cookie_entry->sce_lock_entry;
 	obj = cookie_entry->sce_obj;
@@ -2028,16 +2045,7 @@ state_status_t state_release_grant(state_cookie_entry_t *cookie_entry)
 	/* Check to see if we can grant any blocked locks. */
 	grant_blocked_locks(obj->state_hdl);
 
-	/* In case all locks have wound up free,
-	 * we must release the object reference.
-	 */
-	release = glist_empty(&obj->state_hdl->file.lock_list);
-
 	STATELOCK_unlock(obj);
-
-	if (release)
-		obj->obj_ops->put_ref(obj);
-
 
 	return status;
 }
@@ -2510,6 +2518,27 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 
 				LogEntry("Found existing", found_entry);
 
+				if (found_entry->sle_state != state) {
+					state_t *old_state = NULL;
+
+					LogFullDebug(COMPONENT_STATE,
+					"Existing lock entry has old state");
+
+					old_state = found_entry->sle_state;
+					found_entry->sle_state = state;
+					inc_state_t_ref(state);
+
+					if (old_state != NULL)
+						dec_state_t_ref(old_state);
+
+					glist_add_tail(
+					 &state->state_data.lock.state_locklist,
+					 &found_entry->sle_state_locks);
+
+					LogEntry("sle after state change",
+							found_entry);
+				}
+
 				status = STATE_SUCCESS;
 				return status;
 			}
@@ -2626,14 +2655,6 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 		/* Merge any touching or overlapping locks into this one */
 		LogEntry("FSAL lock acquired, merging locks for",
 			 found_entry);
-
-		if (glist_empty(&obj->state_hdl->file.lock_list)) {
-			/* List was empty, get ref for list. Check before
-			 * mergining, because that can remove the last entry
-			 * from the list if we are merging with it.
-			 */
-			obj->obj_ops->get_ref(obj);
-		}
 
 		merge_lock_entry(obj->state_hdl, found_entry);
 
@@ -2759,13 +2780,6 @@ state_status_t state_unlock(struct fsal_obj_handle *obj,
 	status = subtract_lock_from_list(owner, state_applies, nsm_state, lock,
 					 &removed,
 					 &obj->state_hdl->file.lock_list);
-
-	/* If the lock list has become zero; decrement the pin ref count pt
-	 * placed. Do this here just in case subtract_lock_from_list has made
-	 * list empty even if it failed.
-	 */
-	if (glist_empty(&obj->state_hdl->file.lock_list))
-		obj->obj_ops->put_ref(obj);
 
 	if (status != STATE_SUCCESS) {
 		/* The unlock has not taken affect (other than canceling any
@@ -3039,7 +3053,6 @@ state_status_t state_nlm_notify(state_nsm_client_t *nsmclient,
 
 		/* Release the refcounts we took above. */
 		dec_state_owner_ref(owner);
-		obj->obj_ops->put_ref(obj);
 		clear_op_context_export();
 
 		if (!state_unlock_err_ok(status)) {
@@ -3426,6 +3439,13 @@ void blocked_lock_polling(struct fridgethr_context *ctx)
 		if (state_block_schedule(pblock) != STATE_SUCCESS) {
 			LogMajor(COMPONENT_STATE,
 				 "Unable to schedule lock notification.");
+		} else {
+			/* Since we scheduled this block to be handled in
+			 * another thread, we need to hold a reference on the
+			 * lock entry to prevent the entry from release before
+			 * we are done processing.
+			 */
+			lock_entry_inc_ref(found_entry);
 		}
 
 		LogEntry("Blocked Lock found", found_entry);
@@ -3482,6 +3502,13 @@ static void find_blocked_lock_upcall(struct fsal_obj_handle *obj, void *owner,
 		if (state_block_schedule(pblock) != STATE_SUCCESS) {
 			LogMajor(COMPONENT_STATE,
 				 "Unable to schedule lock notification.");
+		} else {
+			/* Since we scheduled this block to be handled in
+			 * another thread, we need to hold a reference on the
+			 * lock entry to preventthe entry from release before
+			 * we are done processing.
+			 */
+			lock_entry_inc_ref(found_entry);
 		}
 
 		LogEntry("Blocked Lock found", found_entry);
@@ -3540,15 +3567,13 @@ void available_blocked_lock_upcall(struct fsal_obj_handle *obj, void *owner,
  * @brief Free all locks on a file
  *
  * @param[in] obj File to free
- * @return true if locks were removed, false if list was empty
  */
-bool state_lock_wipe(struct state_hdl *hstate)
+void state_lock_wipe(struct state_hdl *hstate)
 {
 	if (glist_empty(&hstate->file.lock_list))
-		return false;
+		return;
 
 	free_list(&hstate->file.lock_list);
-	return true;
 }
 
 void cancel_all_nlm_blocked(void)

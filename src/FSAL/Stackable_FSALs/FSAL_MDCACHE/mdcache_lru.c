@@ -501,12 +501,6 @@ adjust_lru(mdcache_entry_t *entry)
 static inline void
 adjust_lru_root_object(mdcache_entry_t *entry)
 {
-	struct lru_q *q = lru_queue_of(entry);
-
-	/* not adjust */
-	if (q->size < 2)
-		return;
-
 	/* adjust export root or junction nodes */
 	if (is_export_pin(&entry->obj_handle))
 		adjust_lru(entry);
@@ -698,6 +692,7 @@ lru_reap_impl(enum lru_q_id qid)
 	uint32_t refcnt;
 	cih_latch_t latch;
 	int ix;
+	bool adjustable_root_obj;
 
 	lane = LRU_NEXT(reap_lane);
 	for (ix = 0; ix < LRU_N_Q_LANES; ++ix, lane = LRU_NEXT(reap_lane)) {
@@ -717,11 +712,13 @@ lru_reap_impl(enum lru_q_id qid)
 		   __func__, __LINE__, &entry->obj_handle, entry->sub_handle,
 		   refcnt);
 #endif
+		adjustable_root_obj = (lq->size >= 2);
 		QUNLOCK(qlane);
 
 		if (unlikely(refcnt != (LRU_SENTINEL_REFCOUNT + 1))) {
 			/* can't use it. */
-			adjust_lru_root_object(entry);
+			if (adjustable_root_obj)
+				adjust_lru_root_object(entry);
 			mdcache_put(entry);
 			continue;
 		}
@@ -1213,7 +1210,6 @@ static inline size_t lru_run_lane(size_t lane, uint64_t *const totalclosed)
 		/* Move entry to MRU of L2 */
 		q = &qlane->L1;
 		LRU_DQ_SAFE(lru, q);
-		lru->qid = LRU_ENTRY_L2;
 		q = &qlane->L2;
 		lru_insert(lru, q, LRU_MRU);
 
@@ -1582,7 +1578,6 @@ static inline size_t chunk_lru_run_lane(size_t lane)
 		/* Move lru object to MRU of L2 */
 		q = &qlane->L1;
 		CHUNK_LRU_DQ_SAFE(lru, q);
-		lru->qid = LRU_ENTRY_L2;
 		q = &qlane->L2;
 		lru_insert(lru, q, LRU_MRU);
 	} /* for_each_safe lru */
@@ -1771,10 +1766,11 @@ err_open:
 		} else {
 			lru_state.fds_system_imposed = rlim.rlim_cur;
 		}
-		LogInfo(COMPONENT_CACHE_INODE_LRU,
-			"Setting the system-imposed limit on FDs to %d.",
-			lru_state.fds_system_imposed);
 	}
+
+	LogEvent(COMPONENT_CACHE_INODE_LRU,
+		 "Setting the system-imposed limit on FDs to %d.",
+		 lru_state.fds_system_imposed);
 
 	lru_state.fds_hard_limit =
 	    (mdcache_param.fd_limit_percent *
@@ -2051,14 +2047,18 @@ _mdcache_lru_unref(mdcache_entry_t *entry, uint32_t flags, const char *func,
 	bool freed = false;
 
 	if (!other_lock_held) {
-		QLOCK(qlane);
-		if (((entry->lru.flags & LRU_CLEANED) == 0) &&
-		    (entry->lru.qid == LRU_ENTRY_CLEANUP)) {
-			do_cleanup = true;
-			atomic_set_uint32_t_bits(&entry->lru.flags,
-						 LRU_CLEANED);
+		/* pre-check about qid to avoid LOCK every time */
+		if (entry->lru.qid == LRU_ENTRY_CLEANUP) {
+			QLOCK(qlane);
+			/* Locked, check again with lock */
+			if (((entry->lru.flags & LRU_CLEANED) == 0) &&
+			    (entry->lru.qid == LRU_ENTRY_CLEANUP)) {
+				do_cleanup = true;
+				atomic_set_uint32_t_bits(&entry->lru.flags,
+							 LRU_CLEANED);
+			}
+			QUNLOCK(qlane);
 		}
-		QUNLOCK(qlane);
 
 		if (do_cleanup) {
 			LogDebug(COMPONENT_CACHE_INODE,

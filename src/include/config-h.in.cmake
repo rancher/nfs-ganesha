@@ -82,8 +82,12 @@
 #cmakedefine LITTLEEND 1
 #cmakedefine HAVE_DAEMON 1
 #cmakedefine USE_LTTNG 1
+#cmakedefine HAVE_ACL_GET_FD_NP 1
+#cmakedefine HAVE_ACL_SET_FD_NP 1
+#cmakedefine ENABLE_VFS_POSIX_ACL 1
 #cmakedefine ENABLE_VFS_DEBUG_ACL 1
 #cmakedefine ENABLE_RFC_ACL 1
+#cmakedefine ENABLE_VFS_ACL 1
 #cmakedefine CEPHFS_POSIX_ACL 1
 #cmakedefine USE_GLUSTER_XREADDIRPLUS 1
 #cmakedefine USE_GLUSTER_UPCALL_REGISTER 1

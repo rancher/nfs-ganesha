@@ -362,8 +362,9 @@ static fattr_xdr_result encode_supported_attrs(XDR *xdr,
 			assert(res);
 		}
 	}
-	if (!inline_xdr_u_int32_t(xdr, &bits.bitmap4_len))
-		return FATTR_XDR_FAILED;
+	if (!inline_xdr_u_int32_t(xdr, &bits.bitmap4_len) ||
+		bits.bitmap4_len > BITMAP4_MAPLEN)
+			return FATTR_XDR_FAILED;
 	for (offset = 0; offset < bits.bitmap4_len; offset++) {
 		if (!inline_xdr_u_int32_t(xdr, &bits.map[offset]))
 			return FATTR_XDR_FAILED;
@@ -549,7 +550,7 @@ static fattr_xdr_result encode_linksupport(XDR *xdr,
 					   struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	int linksupport = FALSE;
+	bool_t linksupport = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -575,7 +576,7 @@ static fattr_xdr_result encode_symlinksupport(XDR *xdr,
 					      struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	int symlinksupport = FALSE;
+	bool_t symlinksupport = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -603,7 +604,7 @@ static fattr_xdr_result encode_namedattrsupport(XDR *xdr,
 						struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	int namedattrsupport = FALSE;
+	bool_t namedattrsupport = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -668,7 +669,7 @@ static fattr_xdr_result encode_uniquehandles(XDR *xdr,
 					     struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	int uniquehandles = FALSE;
+	bool_t uniquehandles = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -800,8 +801,9 @@ static fattr_xdr_result decode_acl(XDR *xdr, struct xdr_attrs_args *args)
 
 	acldata.naces = 0;
 
-	if (!inline_xdr_u_int32_t(xdr, &acldata.naces))
-		return FATTR_XDR_FAILED;
+	if (!inline_xdr_u_int32_t(xdr, &acldata.naces) ||
+		acldata.naces > 4096)
+			return FATTR_XDR_FAILED;
 	if (acldata.naces == 0)
 		return FATTR_XDR_SUCCESS;	/* no acls is not a crime */
 	acldata.aces = (fsal_ace_t *) nfs4_ace_alloc(acldata.naces);
@@ -965,7 +967,7 @@ static fattr_xdr_result encode_cansettime(XDR *xdr,
 					  struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	uint32_t cansettime = FALSE;
+	bool_t cansettime = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -992,7 +994,7 @@ static fattr_xdr_result encode_case_insensitive(XDR *xdr,
 						struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	uint32_t caseinsensitive = FALSE;
+	bool_t caseinsensitive = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -1019,7 +1021,7 @@ static fattr_xdr_result encode_case_preserving(XDR *xdr,
 					       struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	uint32_t casepreserving = FALSE;
+	bool_t casepreserving = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -1046,7 +1048,7 @@ static fattr_xdr_result encode_chown_restricted(XDR *xdr,
 						struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	uint32_t chownrestricted = FALSE;
+	bool_t chownrestricted = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -1380,7 +1382,7 @@ static fattr_xdr_result decode_fs_locations(XDR *xdr,
 
 static fattr_xdr_result encode_hidden(XDR *xdr, struct xdr_attrs_args *args)
 {
-	uint32_t hidden = FALSE;
+	bool_t hidden = FALSE;
 
 	if (!inline_xdr_bool(xdr, &hidden))
 		return FATTR_XDR_FAILED;
@@ -1403,7 +1405,7 @@ static fattr_xdr_result encode_homogeneous(XDR *xdr,
 					   struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	uint32_t homogeneous = FALSE;
+	bool_t homogeneous = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -1552,7 +1554,7 @@ static fattr_xdr_result decode_maxwrite(XDR *xdr, struct xdr_attrs_args *args)
 
 static fattr_xdr_result encode_mimetype(XDR *xdr, struct xdr_attrs_args *args)
 {
-	int mimetype = FALSE;
+	bool_t mimetype = FALSE;
 
 	if (!inline_xdr_bool(xdr, &mimetype))
 		return FATTR_XDR_FAILED;
@@ -1594,7 +1596,7 @@ static fattr_xdr_result decode_mode(XDR *xdr, struct xdr_attrs_args *args)
 static fattr_xdr_result encode_no_trunc(XDR *xdr, struct xdr_attrs_args *args)
 {
 	struct fsal_export *export;
-	uint32_t no_trunc = FALSE;
+	bool_t no_trunc = FALSE;
 
 	if (args->data != NULL) {
 		export = op_ctx->fsal_export;
@@ -1648,7 +1650,7 @@ static fattr_xdr_result decode_owner(XDR *xdr, struct xdr_attrs_args *args)
 	if (!inline_xdr_u_int(xdr, &len))
 		return FATTR_XDR_FAILED;
 
-	if (len == 0) {
+	if (len <= 0 || len > 1024) {
 		args->nfs_status = NFS4ERR_INVAL;
 		return FATTR_XDR_FAILED;
 	}
@@ -1697,7 +1699,7 @@ static fattr_xdr_result decode_group(XDR *xdr, struct xdr_attrs_args *args)
 	if (!inline_xdr_u_int(xdr, &len))
 		return FATTR_XDR_FAILED;
 
-	if (len == 0) {
+	if (len <= 0 || len > 1024) {
 		args->nfs_status = NFS4ERR_INVAL;
 		return FATTR_XDR_FAILED;
 	}
@@ -1925,7 +1927,7 @@ static fattr_xdr_result decode_spaceused(XDR *xdr, struct xdr_attrs_args *args)
 
 static fattr_xdr_result encode_system(XDR *xdr, struct xdr_attrs_args *args)
 {
-	uint32_t system = FALSE;
+	bool_t system = FALSE;
 
 	if (!inline_xdr_bool(xdr, &system))
 		return FATTR_XDR_FAILED;
@@ -2583,7 +2585,7 @@ static fattr_xdr_result encdec_sec_label(XDR *xdr,
 static fattr_xdr_result encode_xattr_support(XDR *xdr,
 					     struct xdr_attrs_args *args)
 {
-	int xattr_support = FALSE;
+	bool_t xattr_support = FALSE;
 
 	if (args->data != NULL) {
 		struct fsal_export *exp = op_ctx->fsal_export;
@@ -4754,14 +4756,15 @@ posix_acl *encode_posix_acl(const acl_t acl, uint32_t type,
 	acl_tag_t tag;
 	acl_permset_t permset;
 	size_t real_size;
-	uint32_t count;
+	int count;
 	int entry_id = 0;
 	int ret = 0;
 
 	posix_acl *encode_acl;
 	posix_acl_entry *encode_acl_e;
 
-	count = (uint32_t)acl_entries(acl);
+	count = acl_entries(acl);
+
 	if (count < 0) {
 		LogDebug(COMPONENT_NFSPROTO,
 				"The acl is not a valid pointer to an ACL.");
@@ -4775,7 +4778,7 @@ posix_acl *encode_posix_acl(const acl_t acl, uint32_t type,
 	if (!encode_acl)
 		return NULL;
 
-	encode_acl->count = count;
+	encode_acl->count = (uint32_t) count;
 	encode_acl_e = encode_acl->entries;
 
 	for (entry_id = ACL_FIRST_ENTRY; ; entry_id = ACL_NEXT_ENTRY,
@@ -4987,7 +4990,7 @@ int nfs3_acl_2_fsal_acl(struct fsal_attrlist *attr, nfs3_int32 mask,
 	/* Decode default acl */
 	if (is_dir && (mask & (NFS_DFACL|NFS_DFACLCNT))) {
 		i_acl = decode_posix_acl(d_acl, ACL_TYPE_DEFAULT);
-		if (!e_acl) {
+		if (!i_acl) {
 			LogMajor(COMPONENT_NFSPROTO,
 					"failed to decode default posix acl");
 			rc = -EINVAL;

@@ -44,7 +44,7 @@ set(GANESHA_MAJOR_VERSION 4)
 # Minor version is blank for development.  On release, it becomes ".0".  On a
 # stable maintenance branch, this becomes ".N" where N is monotonically
 # increasing starting at 1. Remember to include the "." !!
-set(GANESHA_MINOR_VERSION .0)
+set(GANESHA_MINOR_VERSION .2)
 
 IF(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 set(GANESHA_BUILD_RELEASE 1)
@@ -69,7 +69,7 @@ SET(RUNTIMEDIR "${SYSSTATEDIR}/run/ganesha" CACHE PATH "Runtime directory (for t
 # Extra version is for naming development/RC.  It is blank in stable branches
 # so it can be available to end-users to name local variants/versions
 # If used, it is always of the form "-whateveryouwant"
-set(GANESHA_EXTRA_VERSION .7)
+set(GANESHA_EXTRA_VERSION .1)
 
 set(GANESHA_VERSION ${GANESHA_MAJOR_VERSION}${GANESHA_MINOR_VERSION}${GANESHA_EXTRA_VERSION})
 set(GANESHA_BASE_VERSION ${GANESHA_MAJOR_VERSION}${GANESHA_MINOR_VERSION})
@@ -212,7 +212,6 @@ if (BSDBASED)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -ggdb")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-omit-frame-pointer")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-optimize-sibling-calls")
-    find_library(LIBDL c)  # libc suffices on FreeBSD and Darwin
 endif(BSDBASED)
 
 if (FREEBSD)
@@ -232,7 +231,6 @@ if (LINUX)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
     set(OS_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include/os/linux")
-    find_library(LIBDL dl)  # module loader
 endif(LINUX)
 
 if (MSVC)
@@ -308,6 +306,7 @@ option(USE_CB_SIMULATOR "enable callback simulator thread" OFF)
 
 goption(USE_NFSIDMAP "Use of libnfsidmap for name resolution" ON)
 option(ENABLE_ERROR_INJECTION "enable error injection" OFF)
+goption(ENABLE_VFS_POSIX_ACL "Enable NFSv4 to POSIX ACL mapping for VFS" OFF)
 option(ENABLE_VFS_DEBUG_ACL "Enable debug ACL store for VFS" OFF)
 option(ENABLE_RFC_ACL "Use all RFC ACL checks" OFF)
 option(USE_TOOL_MULTILOCK "build multilock tool" OFF)
@@ -622,6 +621,9 @@ if (USE_MAN_PAGE)
   endif(NOT SPHINX_BUILD)
 endif(USE_MAN_PAGE)
 
+# POSIX ACLs - these may be used in multiple places
+find_package(LibACL)
+
 # Validate fsal dependencies
 
 gopt_test(USE_FSAL_PROXY_V4)
@@ -648,15 +650,55 @@ if (USE_FSAL_PROXY_V4)
   endif(PROXYV4_HANDLE_MAPPING)
 endif (USE_FSAL_PROXY_V4)
 
-# VFS has an optional dependency for libbtrfsutil
 gopt_test(USE_FSAL_VFS)
 if(USE_FSAL_VFS)
+  # VFS has an optional dependency for libbtrfsutil
   find_library(BTRFSUTIL_LIB btrfsutil)
   if (BTRFSUTIL_LIB)
     message(STATUS "Found BTRFS Util library: ${BTRFSUTIL_LIB}")
     set(USE_BTRFSUTIL ON)
     set(SYSTEM_LIBRARIES ${BTRFSUTIL_LIB} ${SYSTEM_LIBRARIES})
   endif (BTRFSUTIL_LIB)
+  if(ENABLE_VFS_DEBUG_ACL)
+    set(ENABLE_VFS_ACL ON)
+    if(ENABLE_VFS_POSIX_ACL)
+      set(ENABLE_VFS_POSIX_ACL OFF)
+      message(WARNING "ENABLE_VFS_DEBUG_ACL is on, so disabling ENABLE_VFS_POSIX_ACL")
+    endif(ENABLE_VFS_POSIX_ACL)
+  else(ENABLE_VFS_DEBUG_ACL)
+    # POSIX ACL support?
+    gopt_test(ENABLE_VFS_POSIX_ACL)
+    if(ENABLE_VFS_POSIX_ACL)
+      if(NOT HAVE_LIBACL)
+	set(ENABLE_VFS_POSIX_ACL OFF)
+	message(WARNING "Could not find libacl")
+      endif(NOT HAVE_LIBACL)
+      if(NOT HAVE_SYS_ACL_H)
+	set(ENABLE_VFS_POSIX_ACL OFF)
+	message(WARNING "Could not find sys/acl.h")
+      endif(NOT HAVE_SYS_ACL_H)
+      if(NOT (HAVE_ACL_GET_FD_NP OR LINUX))
+	set(ENABLE_VFS_POSIX_ACL OFF)
+	message(WARNING "Could not find acl_get_fd_np() and not Linux")
+      endif(NOT (HAVE_ACL_GET_FD_NP OR LINUX))
+      if(NOT (HAVE_ACL_SET_FD_NP OR LINUX))
+	set(ENABLE_VFS_POSIX_ACL OFF)
+	message(WARNING "Could not find acl_set_fd_np() and not Linux")
+      endif(NOT (HAVE_ACL_SET_FD_NP OR LINUX))
+      if(ENABLE_VFS_POSIX_ACL)
+	set(ENABLE_VFS_ACL ON)
+	set(USE_ACL_MAPPING ON)
+	# libacl only required on Linux
+	set(LibACL_FIND_REQUIRED HAVE_LIBACL)
+      else(ENABLE_VFS_POSIX_ACL)
+	if(ENABLE_VFS_POSIX_ACL_REQUIRED)
+	  message(FATAL_ERROR "Missing VFS FSAL prerequisites, but requested on command line")
+	else(ENABLE_VFS_POSIX_ACL_REQUIRED)
+	  message(WARNING "Missing VFS FSAL prerequisites, disabling ENABLE_VFS_POSIX_ACL")
+	endif(ENABLE_VFS_POSIX_ACL_REQUIRED)
+      endif(ENABLE_VFS_POSIX_ACL)
+    endif(ENABLE_VFS_POSIX_ACL)
+  endif(ENABLE_VFS_DEBUG_ACL)
 endif(USE_FSAL_VFS)
 
 gopt_test(USE_FSAL_LUSTRE)
@@ -708,27 +750,23 @@ if(USE_FSAL_CEPH)
   endif(NOT CEPHFS_FOUND)
   gopt_test(CEPHFS_POSIX_ACL)
   if(CEPHFS_POSIX_ACL)
-    check_include_files("acl/libacl.h" HAVE_ACL_H)
-    if(HAVE_ACL_H)
+    if(HAVE_LIBACL)
       set(USE_ACL_MAPPING ON)
-      set(LibACL_FIND_REQUIRED TRUE)
-    else()
+    else(HAVE_LIBACL)
       set(CEPHFS_POSIX_ACL OFF)
       message(STATUS "Could not find libacl, disabling CephFS POSIX ACL")
-    endif(HAVE_ACL_H)
+    endif(HAVE_LIBACL)
   endif(CEPHFS_POSIX_ACL)
 endif(USE_FSAL_CEPH)
 
 gopt_test(USE_NFSACL3)
   if(USE_NFSACL3)
-    check_include_files("acl/libacl.h" HAVE_ACL_H)
-    if(HAVE_ACL_H)
+    if(HAVE_LIBACL)
       set(USE_ACL_MAPPING ON)
-      set(LibACL_FIND_REQUIRED TRUE)
-    else()
+    else(HAVE_LIBACL)
       set(USE_NFSACL3 OFF)
       message(STATUS "Could not find libacl, disabling USE_NFSACL3")
-    endif(HAVE_ACL_H)
+    endif(HAVE_LIBACL)
   endif(USE_NFSACL3)
 
 gopt_test(USE_FSAL_GPFS)
@@ -814,16 +852,14 @@ if(USE_FSAL_GLUSTER)
         set(USE_FSAL_GLUSTER OFF)
       endif(USE_FSAL_GLUSTER_REQUIRED)
     endif(NOT HAVE_SYS_XATTR_H)
-    check_include_files("acl/libacl.h" HAVE_ACL_H)
-    if(HAVE_ACL_H)
+    if(HAVE_LIBACL)
 	set(USE_POSIX_ACLS ON)
 	set(USE_ACL_MAPPING ON)
-	set(LibACL_FIND_REQUIRED TRUE)
-    else()
+    else(HAVE_LIBACL)
 	set(USE_POSIX_ACLS OFF)
 	set(USE_FSAL_GLUSTER OFF)
 	message(STATUS "Could not find libacl, disabling GLUSTER fsal build")
-    endif(HAVE_ACL_H)
+    endif(HAVE_LIBACL)
     check_library_exists(gfapi glfs_xreaddirplus_r ${GFAPI_LIBDIR} HAVE_XREADDIRPLUS)
     if(HAVE_XREADDIRPLUS)
         set(USE_GLUSTER_XREADDIRPLUS ON)
@@ -898,13 +934,13 @@ endif()
 # Find optional libraries/packages
 
 if (USE_ACL_MAPPING)
-  find_package(LibACL)
-  if(LIBACL_FOUND)
+  if(HAVE_LIBACL)
     set(SYSTEM_LIBRARIES ${LIBACL_LIBRARY} ${SYSTEM_LIBRARIES})
-  else(LIBACL_FOUND)
+  else(HAVE_LIBACL)
     set(USE_ACL_MAPPING OFF)
-    message(STATUS "Could not find libacl, disabling ACL mapping build")
-  endif(LIBACL_FOUND)
+    # HAVE_LIBACL must be set before setting USE_ACL_MAPPING
+    message(FATAL_ERROR "Could not find libacl, disabling ACL mapping build")
+  endif(HAVE_LIBACL)
 endif(USE_ACL_MAPPING)
 
 gopt_test(USE_EFENCE)
@@ -1192,7 +1228,7 @@ FIND_LIBRARY(LIBJSONC_LIB json-c json)
 set(SYSTEM_LIBRARIES
   ${NTIRPC_LIBRARY}
   ${SYSTEM_LIBRARIES}
-  ${LIBDL}
+  ${CMAKE_DL_LIBS}
   ${KRB5_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${LIBURCU_LIB}
@@ -1276,6 +1312,7 @@ message(STATUS "USE_CB_SIMULATOR = ${USE_CB_SIMULATOR}")
 message(STATUS "USE_BTRFSUTIL = ${USE_BTRFSUTIL}")
 message(STATUS "USE_NFSIDMAP = ${USE_NFSIDMAP}")
 message(STATUS "ENABLE_ERROR_INJECTION = ${ENABLE_ERROR_INJECTION}")
+message(STATUS "ENABLE_VFS_POSIX_ACL = ${ENABLE_VFS_POSIX_ACL}")
 message(STATUS "ENABLE_VFS_DEBUG_ACL = ${ENABLE_VFS_DEBUG_ACL}")
 message(STATUS "ENABLE_RFC_ACL = ${ENABLE_RFC_ACL}")
 message(STATUS "CEPHFS_POSIX_ACL = ${CEPHFS_POSIX_ACL}")
@@ -1347,6 +1384,11 @@ set(_VALGRIND_MEMCHECK ${_VALGRIND_MEMCHECK}
 set(ENABLE_ERROR_INJECTION ${ENABLE_ERROR_INJECTION}
   CACHE BOOL
    "enable error injection"
+   FORCE)
+
+set(ENABLE_VFS_POSIX_ACL ${ENABLE_VFS_POSIX_ACL}
+  CACHE BOOL
+   "Enable NFSv4 to POSIX ACL mapping for VFS"
    FORCE)
 
 set(ENABLE_VFS_DEBUG_ACL ${ENABLE_VFS_DEBUG_ACL}
@@ -1500,6 +1542,12 @@ if(${ALLOCATOR} STREQUAL "jemalloc")
 else(${ALLOCATOR} STREQUAL "jemalloc")
     set(BCOND_JEMALLOC "%bcond_with")
 endif(${ALLOCATOR} STREQUAL "jemalloc")
+
+if(${ALLOCATOR} STREQUAL "tcmalloc")
+    set(BCOND_TCMALLOC "%bcond_without")
+else(${ALLOCATOR} STREQUAL "tcmalloc")
+    set(BCOND_TCMALLOC "%bcond_with")
+endif(${ALLOCATOR} STREQUAL "tcmalloc")
 
 if(USE_ADMIN_TOOLS)
     set(BCOND_UTILS "%bcond_without")

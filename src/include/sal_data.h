@@ -131,6 +131,25 @@ extern hash_table_t *ht_session_id;
  */
 #define NFS41_NB_SLOTS_DEF 64
 
+
+/**
+ * @brief Default string length of all operations in one compound
+ */
+#define NFS4_COMPOUND_OPERATIONS_STR_LEN 256
+
+/**
+ * @brief the simple info of last request to save in slot
+ */
+
+struct nfs41_cached_req {
+	nfs_opnum4 opcodes[NFS4_MAX_OPERATIONS];	/*< opcodes
+		of compound */
+	uint32_t opcode_num;	/*< number of opcode in one compound */
+	uint32_t xid;	/*< Xid of request */
+	sequenceid4 seq_id;	/*< Sequence id of request */
+	uint64_t finish_time_ms;	/*< Finish time of request in ms */
+};
+
 /**
  * @brief Members in the slot table
  */
@@ -141,6 +160,7 @@ typedef struct nfs41_session_slot__ {
 	struct COMPOUND4res_extended *cached_result;	/*< NFv41: pointer to
 							   cached RPC result in
 							   a session's slot */
+	struct nfs41_cached_req last_req; /*< Last request of the slot */
 } nfs41_session_slot_t;
 
 /**
@@ -284,6 +304,16 @@ struct state_nlm_share {
 };
 
 /**
+ * @brief The number of bytes in the stateid.other
+ *
+ * The value 12 is fixed by RFC 3530/RFC 5661.
+ */
+#define OTHERSIZE 12
+
+extern char all_zero[OTHERSIZE];
+extern char all_ones[OTHERSIZE];
+
+/**
  * @brief Data for a set of locks
  */
 
@@ -293,7 +323,7 @@ struct state_lock {
 						   This field MUST be first */
 	struct glist_head state_sharelist;	/*< List of states related
 						   to a share */
-	state_t *openstate;	/*< The related open-state */
+	char openstate_key[OTHERSIZE]; /*< The hash key of related open-state */
 };
 
 /**
@@ -369,16 +399,6 @@ union state_data {
 };
 
 /**
- * @brief The number of bytes in the stateid.other
- *
- * The value 12 is fixed by RFC 3530/RFC 5661.
- */
-#define OTHERSIZE 12
-
-extern char all_zero[OTHERSIZE];
-extern char all_ones[OTHERSIZE];
-
-/**
  * @brief Structure representing a single NFSv4 state
  *
  * Each state is identified by stateid and represents some resource or
@@ -400,7 +420,6 @@ struct state_t {
 	/* Don't re-order or move these next two.  They are used for hashing */
 	state_owner_t *state_owner;	/**< State Owner related to state */
 	struct fsal_obj_handle *state_obj; /**< owning object */
-	struct fsal_export *state_exp;  /**< FSAL export */
 	union state_data state_data;
 	enum state_type state_type;
 	u_int32_t state_seqid;		/**< The NFSv4 Sequence id */

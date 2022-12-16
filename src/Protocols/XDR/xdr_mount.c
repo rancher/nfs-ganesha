@@ -10,9 +10,7 @@
 #include "nfs23.h"
 #include "nfs_fh.h"
 
-bool xdr_mountstat3(xdrs, objp)
-register XDR *xdrs;
-mountstat3 *objp;
+bool xdr_mountstat3(XDR *xdrs, mountstat3 *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -26,9 +24,7 @@ mountstat3 *objp;
 	return (true);
 }
 
-bool xdr_fhandle3(xdrs, objp)
-register XDR *xdrs;
-fhandle3 *objp;
+bool xdr_fhandle3(XDR *xdrs, fhandle3 *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -44,9 +40,7 @@ fhandle3 *objp;
 	return (true);
 }
 
-bool xdr_dirpath(xdrs, objp)
-register XDR *xdrs;
-mnt3_dirpath *objp;
+bool xdr_dirpath(XDR *xdrs, mnt3_dirpath *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -60,9 +54,7 @@ mnt3_dirpath *objp;
 	return (true);
 }
 
-bool xdr_name(xdrs, objp)
-register XDR *xdrs;
-mnt3_name *objp;
+bool xdr_name(XDR *xdrs, mnt3_name *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -76,26 +68,7 @@ mnt3_name *objp;
 	return (true);
 }
 
-bool xdr_groups(xdrs, objp)
-register XDR *xdrs;
-mnt3_groups *objp;
-{
-
-#if defined(_LP64) || defined(_KERNEL)
-	register int __attribute__ ((__unused__)) * buf;
-#else
-	register long __attribute__ ((__unused__)) * buf;
-#endif
-
-	if (!xdr_pointer(xdrs, (void **)objp, sizeof(struct groupnode),
-			 (xdrproc_t) xdr_groupnode))
-		return (false);
-	return (true);
-}
-
-bool xdr_groupnode(xdrs, objp)
-register XDR *xdrs;
-groupnode *objp;
+bool xdr_groupnode_x(XDR *xdrs, groupnode *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -106,31 +79,47 @@ groupnode *objp;
 
 	if (!xdr_name(xdrs, &objp->gr_name))
 		return (false);
-	if (!xdr_groups(xdrs, &objp->gr_next))
-		return (false);
 	return (true);
 }
 
-bool xdr_exports(xdrs, objp)
-register XDR *xdrs;
-mnt3_exports *objp;
+bool xdr_groups(XDR *xdrs, struct groupnode **objp)
 {
+	/*
+	 * more_elements is pre-computed in case the direction is
+	 * XDR_ENCODE or XDR_FREE.  more_elements is overwritten by
+	 * xdr_bool when the direction is XDR_DECODE.
+	 */
+	int freeing;
+	struct groupnode **next = NULL;	/* pacify gcc */
+	bool_t more_elements = false;	/* yes, bool_t */
 
-#if defined(_LP64) || defined(_KERNEL)
-	register int __attribute__ ((__unused__)) * buf;
-#else
-	register long __attribute__ ((__unused__)) * buf;
-#endif
+	assert(xdrs != NULL);
+	assert(objp != NULL);
 
-	if (!xdr_pointer(xdrs, (void **)objp, sizeof(struct exportnode),
-			 (xdrproc_t) xdr_exportnode))
-		return (false);
-	return (true);
+	freeing = (xdrs->x_op == XDR_FREE);
+
+	for (;;) {
+		more_elements = (bool_t) (*objp != NULL);
+		if (!xdr_bool(xdrs, &more_elements))
+			return (false);
+		if (!more_elements)
+			return (true);	/* we are done */
+		/*
+		 * the unfortunate side effect of non-recursion is that in
+		 * the case of freeing we must remember the next object
+		 * before we free the current object ...
+		 */
+		if (freeing)
+			next = &((*objp)->gr_next);
+		if (!xdr_reference(xdrs, (void **) objp,
+				   (u_int) sizeof(struct groupnode),
+				   (xdrproc_t) xdr_groupnode_x))
+			return (false);
+		objp = (freeing) ? next : &((*objp)->gr_next);
+	}
 }
 
-bool xdr_exportnode(xdrs, objp)
-register XDR *xdrs;
-exportnode *objp;
+bool xdr_exportnode_x(XDR *xdrs, exportnode *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -143,31 +132,47 @@ exportnode *objp;
 		return (false);
 	if (!xdr_groups(xdrs, &objp->ex_groups))
 		return (false);
-	if (!xdr_exports(xdrs, &objp->ex_next))
-		return (false);
 	return (true);
 }
 
-bool xdr_mountlist(xdrs, objp)
-register XDR *xdrs;
-mountlist *objp;
+bool xdr_exports(XDR *xdrs, struct exportnode **objp)
 {
+	/*
+	 * more_elements is pre-computed in case the direction is
+	 * XDR_ENCODE or XDR_FREE.  more_elements is overwritten by
+	 * xdr_bool when the direction is XDR_DECODE.
+	 */
+	int freeing;
+	struct exportnode **next = NULL;	/* pacify gcc */
+	bool_t more_elements = false;		/* yes, bool_t */
 
-#if defined(_LP64) || defined(_KERNEL)
-	register int __attribute__ ((__unused__)) * buf;
-#else
-	register long __attribute__ ((__unused__)) * buf;
-#endif
+	assert(xdrs != NULL);
+	assert(objp != NULL);
 
-	if (!xdr_pointer(xdrs, (void **)objp, sizeof(struct mountbody),
-			 (xdrproc_t) xdr_mountbody))
-		return (false);
-	return (true);
+	freeing = (xdrs->x_op == XDR_FREE);
+
+	for (;;) {
+		more_elements = (bool_t) (*objp != NULL);
+		if (!xdr_bool(xdrs, &more_elements))
+			return (false);
+		if (!more_elements)
+			return (true);	/* we are done */
+		/*
+		 * the unfortunate side effect of non-recursion is that in
+		 * the case of freeing we must remember the next object
+		 * before we free the current object ...
+		 */
+		if (freeing)
+			next = &((*objp)->ex_next);
+		if (!xdr_reference(xdrs, (void **) objp,
+				   (u_int) sizeof(struct exportnode),
+				   (xdrproc_t) xdr_exportnode_x))
+			return (false);
+		objp = (freeing) ? next : &((*objp)->ex_next);
+	}
 }
 
-bool xdr_mountbody(xdrs, objp)
-register XDR *xdrs;
-mountbody *objp;
+bool xdr_mountbody_x(XDR *xdrs, mountbody *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -180,14 +185,47 @@ mountbody *objp;
 		return (false);
 	if (!xdr_dirpath(xdrs, &objp->ml_directory))
 		return (false);
-	if (!xdr_mountlist(xdrs, &objp->ml_next))
-		return (false);
 	return (true);
 }
 
-bool xdr_mountres3_ok(xdrs, objp)
-register XDR *xdrs;
-mountres3_ok *objp;
+bool xdr_mountlist(XDR *xdrs, struct mountbody **objp)
+{
+	/*
+	 * more_elements is pre-computed in case the direction is
+	 * XDR_ENCODE or XDR_FREE.  more_elements is overwritten by
+	 * xdr_bool when the direction is XDR_DECODE.
+	 */
+	int freeing;
+	struct mountbody **next = NULL;	/* pacify gcc */
+	bool_t more_elements = false;	/* yes, bool_t */
+
+	assert(xdrs != NULL);
+	assert(objp != NULL);
+
+	freeing = (xdrs->x_op == XDR_FREE);
+
+	for (;;) {
+		more_elements = (bool_t) (*objp != NULL);
+		if (!xdr_bool(xdrs, &more_elements))
+			return (false);
+		if (!more_elements)
+			return (true);	/* we are done */
+		/*
+		 * the unfortunate side effect of non-recursion is that in
+		 * the case of freeing we must remember the next object
+		 * before we free the current object ...
+		 */
+		if (freeing)
+			next = &((*objp)->ml_next);
+		if (!xdr_reference(xdrs, (void **) objp,
+				   (u_int) sizeof(struct mountbody),
+				   (xdrproc_t) xdr_mountbody_x))
+			return (false);
+		objp = (freeing) ? next : &((*objp)->ml_next);
+	}
+}
+
+bool xdr_mountres3_ok(XDR *xdrs, mountres3_ok *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)
@@ -206,9 +244,7 @@ mountres3_ok *objp;
 	return (true);
 }
 
-bool xdr_mountres3(xdrs, objp)
-register XDR *xdrs;
-mountres3 *objp;
+bool xdr_mountres3(XDR *xdrs, mountres3 *objp)
 {
 
 #if defined(_LP64) || defined(_KERNEL)

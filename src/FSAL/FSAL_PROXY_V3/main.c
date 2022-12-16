@@ -59,7 +59,7 @@ struct proxyv3_fsal_module PROXY_V3 = {
 			.unique_handles = true,
 			.acl_support = FSAL_ACLSUPPORT_ALLOW,
 			.homogenous = true,
-			.supported_attrs = ((const attrmask_t) ATTRS_NFS3),
+			.supported_attrs = ((const attrmask_t) ATTRS_POSIX),
 			.link_supports_permission_checks = true,
 			.readdir_plus = true,
 			.expire_time_parent = -1,
@@ -1107,6 +1107,23 @@ proxyv3_open2(struct fsal_obj_handle *obj_hdl,
 }
 
 /**
+ * @brief Re-open a file that may be already opened
+ */
+static fsal_status_t
+proxyv3_reopen2(struct fsal_obj_handle *obj_hdl,
+		struct state_t *state,
+		fsal_openflags_t openflags)
+{
+	LogDebug(COMPONENT_FSAL,
+		 "reopen2 of obj_hdl %p flags %" PRIx16, obj_hdl, openflags);
+
+	/* Nothing to do here as Ganesha already did state and access checks.
+	 * Ganesha will call update_stateid so no need to worry about the
+	 * state_seqid. */
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
+}
+
+/**
  * @brief Make a new symlink from dir/name => link_path.
  */
 
@@ -1420,6 +1437,7 @@ proxyv3_mknode(struct fsal_obj_handle *dir_hdl,
 	MKNOD3res result;
 	sattr3 *attrs;
 	MKNOD3resok *resok = &result.MKNOD3res_u.resok;
+	const bool allow_rawdev = true;
 
 	memset(&result, 0, sizeof(result));
 
@@ -1431,38 +1449,26 @@ proxyv3_mknode(struct fsal_obj_handle *dir_hdl,
 	switch (nodetype) {
 	case CHARACTER_FILE:
 		args.what.type = NF3CHR;
+		attrs = &args.what.mknoddata3_u.device.dev_attributes;
 		break;
 	case BLOCK_FILE:
 		args.what.type = NF3BLK;
+		attrs = &args.what.mknoddata3_u.device.dev_attributes;
 		break;
 	case SOCKET_FILE:
 		args.what.type = NF3SOCK;
+		attrs = &args.what.mknoddata3_u.pipe_attributes;
 		break;
 	case FIFO_FILE:
 		args.what.type = NF3FIFO;
+		attrs = &args.what.mknoddata3_u.pipe_attributes;
 		break;
 	default:
 		LogWarn(COMPONENT_FSAL,
 			"mknode got invalid MKNOD type %d",
 			nodetype);
+		return fsalstat(ERR_FSAL_INVAL, 0);
 	}
-
-	switch (nodetype) {
-	case CHARACTER_FILE:
-	case BLOCK_FILE:
-		attrs = &args.what.mknoddata3_u.device.dev_attributes;
-		break;
-	case SOCKET_FILE:
-	case FIFO_FILE:
-		attrs = &args.what.mknoddata3_u.pipe_attributes;
-		break;
-	default:
-		/* Unreachable.*/
-		attrs = NULL;
-		break;
-	}
-
-	const bool allow_rawdev = true;
 
 	if (!fsalattr_to_sattr3(attrs_in, allow_rawdev, attrs)) {
 		LogWarn(COMPONENT_FSAL,
@@ -1693,7 +1699,7 @@ proxyv3_readdir(struct fsal_obj_handle *dir_hdl,
 		 dir, cookie);
 
 	/* Check that attrmask is at most NFSv3 */
-	if (!attrmask_is_nfs3(attrmask)) {
+	if (!attrmask_is_posix(attrmask)) {
 		LogWarn(COMPONENT_FSAL,
 			"readdir asked for incompatible output attrs");
 		return fsalstat(ERR_FSAL_INVAL, 0);
@@ -2878,6 +2884,7 @@ MODULE_INIT void proxy_v3_init(void)
 
 	/* Open/close. */
 	PROXY_V3.handle_ops.open2 = proxyv3_open2;
+	PROXY_V3.handle_ops.reopen2 = proxyv3_reopen2;
 	PROXY_V3.handle_ops.close = proxyv3_close;
 	PROXY_V3.handle_ops.close2 = proxyv3_close2;
 

@@ -59,6 +59,8 @@ Requires: openSUSE-release
 
 @BCOND_JEMALLOC@ jemalloc
 
+@BCOND_TCMALLOC@ tcmalloc
+
 @BCOND_LTTNG@ lttng
 %global use_lttng %{on_off_switch lttng}
 
@@ -104,7 +106,7 @@ Url:		https://github.com/nfs-ganesha/nfs-ganesha/wiki
 Source:		%{sourcename}.tar.gz
 
 BuildRequires:	cmake
-BuildRequires:	bison flex
+BuildRequires:	bison
 BuildRequires:	flex
 BuildRequires:	pkgconfig
 BuildRequires:	userspace-rcu-devel
@@ -169,6 +171,9 @@ BuildRequires:	libmooshika-devel >= 0.6-0
 %endif
 %if %{with jemalloc}
 BuildRequires:	jemalloc-devel
+%endif
+%if %{with tcmalloc}
+BuildRequires:	gperftools-devel
 %endif
 BuildRequires: systemd
 Requires(post): systemd
@@ -532,6 +537,9 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DSANITIZE_ADDRESS=%{use_sanitize_address}	\
 %if %{with jemalloc}
 	-DALLOCATOR=jemalloc
+%endif
+%if %{with tcmalloc}
+	-DALLOCATOR=tcmalloc
 %endif
 
 make %{?_smp_mflags} || make %{?_smp_mflags} || make

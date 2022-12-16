@@ -104,10 +104,7 @@ static fsal_status_t lookup_int(struct fsal_obj_handle *dir_hdl,
 	if (rc < 0)
 		return rgw2fsal_error(rc);
 
-	rc = construct_handle(export, rgw_fh, &st, &obj);
-	if (rc < 0) {
-		return rgw2fsal_error(rc);
-	}
+	(void) construct_handle(export, rgw_fh, &st, &obj);
 
 	*obj_hdl = &obj->handle;
 
@@ -355,10 +352,7 @@ static fsal_status_t rgw_fsal_mkdir(struct fsal_obj_handle *dir_hdl,
 	if (rc < 0)
 		return rgw2fsal_error(rc);
 
-	rc = construct_handle(export, rgw_fh, &st, &obj);
-	if (rc < 0) {
-		return rgw2fsal_error(rc);
-	}
+	(void) construct_handle(export, rgw_fh, &st, &obj);
 
 	*obj_hdl = &obj->handle;
 
@@ -478,7 +472,7 @@ fsal_status_t rgw_fsal_setattr2(struct fsal_obj_handle *obj_hdl,
 		 * share reservation checking, thus the NULL parameters.
 		 */
 		status = fsal_find_fd(NULL, obj_hdl, NULL, &handle->share,
-				bypass, state, FSAL_O_RDWR, NULL, NULL,
+				bypass, state, FSAL_O_WRITE, NULL, NULL,
 				&has_lock, &closefd, false,
 				&reusing_open_state_fd);
 
@@ -1072,7 +1066,7 @@ fsal_status_t rgw_fsal_open2(struct fsal_obj_handle *obj_hdl,
 	created = (posix_flags & O_EXCL) != 0;
 	*caller_perm_check = false;
 
-	construct_handle(export, rgw_fh, &st, &obj);
+	(void) construct_handle(export, rgw_fh, &st, &obj);
 
 	/* Check if the opened file is not a regular file. */
 	if (posix2fsal_type(st.st_mode) == DIRECTORY) {
@@ -1667,6 +1661,12 @@ static void handle_to_key(struct fsal_obj_handle *obj_hdl,
 
 #ifdef USE_FSAL_RGW_XATTRS
 
+/** @todo - the code below has some serious problems with dereferencing NULL
+ *          pointers. The CMake capability detection has been "nerfed" so this
+ *          code will never be enabled...
+ *
+ */
+
 static int getxattr_cb(rgw_xattrlist *attrs, void *arg, uint32_t flags)
 {
 	xattrvalue4 *cb_arg = (xattrvalue4 *)arg;
@@ -1703,6 +1703,7 @@ static fsal_status_t getxattrs(struct fsal_obj_handle *obj_hdl,
 	struct rgw_handle *handle =
 		container_of(obj_hdl, struct rgw_handle, handle);
 
+	/** @todo - deref of NULL pointer set above! */
 	attrs.xattrs->key.val =
 		xa_name->utf8string_val;
 	attrs.xattrs->key.len = xa_name->utf8string_len;
@@ -1768,6 +1769,7 @@ static fsal_status_t setxattrs(struct fsal_obj_handle *obj_hdl,
 	struct rgw_handle *handle = container_of(obj_hdl, struct rgw_handle,
 						 handle);
 
+	/** @todo - deref of NULL pointer set above! */
 	attrs.xattrs->key.val =
 		xa_name->utf8string_val;
 	attrs.xattrs->key.len = xa_name->utf8string_len;
@@ -1818,6 +1820,7 @@ static fsal_status_t removexattrs(struct fsal_obj_handle *obj_hdl,
 		container_of(obj_hdl, struct rgw_handle, handle);
 
 	attrs.xattr_cnt = 1;
+	/** @todo - deref of NULL pointer set above! */
 	attrs.xattrs->key.val =
 		xa_name->utf8string_val;
 	attrs.xattrs->key.len = xa_name->utf8string_len;
