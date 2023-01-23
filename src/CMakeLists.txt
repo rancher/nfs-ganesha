@@ -187,6 +187,16 @@ include(FindPkgConfig)
 # For our option system
 include(${GANESHA_TOP_CMAKE_DIR}/cmake/goption.cmake)
 
+goption(USE_RELATIVE_FILE_PATHS_IN_LOGS "Use relative file paths in log files" ON)
+gopt_test(USE_RELATIVE_FILE_PATHS_IN_LOGS)
+
+include(CheckCCompilerFlag)
+CHECK_C_COMPILER_FLAG("-fmacro-prefix-map=old=new" HAS_MACRO_PREFIX_MAP_FLAG)
+
+if(${HAS_MACRO_PREFIX_MAP_FLAG} AND USE_RELATIVE_FILE_PATHS_IN_LOGS)
+  add_compile_options(-fmacro-prefix-map=${GANESHA_TOP_CMAKE_DIR}/=./)
+endif()
+
 # If we are in a git tree, then this CMakeLists.txt is in "src/" and go .git is in "src/.."
 IF( EXISTS ${GANESHA_TOP_CMAKE_DIR}/../.git/HEAD  )
   message( STATUS "Compilation from within a git repository. Using git rev-parse HEAD")
@@ -1348,6 +1358,8 @@ message(STATUS "PLATFORM = ${PLATFORM}")
 message(STATUS "ARCH = ${ARCH}")
 message(STATUS "VERSION = ${GANESHA_VERSION}")
 message(STATUS "BUILD HOST = ${BUILD_HOST_NAME}")
+message(STATUS "C COMPILER = ${CMAKE_CXX_COMPILER_ID}")
+message(STATUS "C COMPILER VERSION = ${CMAKE_C_COMPILER_VERSION}")
 message(STATUS "-------------------------------------------------------")
 message(STATUS "USE_FSAL_PROXY_V4 = ${USE_FSAL_PROXY_V4}")
 message(STATUS "USE_FSAL_PROXY_V3 = ${USE_FSAL_PROXY_V3}")
@@ -1381,6 +1393,7 @@ message(STATUS "USE_DBUS = ${USE_DBUS}")
 message(STATUS "USE_CB_SIMULATOR = ${USE_CB_SIMULATOR}")
 message(STATUS "USE_BTRFSUTIL = ${USE_BTRFSUTIL}")
 message(STATUS "USE_NFSIDMAP = ${USE_NFSIDMAP}")
+message(STATUS "USE_RELATIVE_FILE_PATHS_IN_LOGS = ${USE_RELATIVE_FILE_PATHS_IN_LOGS}")
 message(STATUS "ENABLE_ERROR_INJECTION = ${ENABLE_ERROR_INJECTION}")
 message(STATUS "ENABLE_VFS_POSIX_ACL = ${ENABLE_VFS_POSIX_ACL}")
 message(STATUS "ENABLE_VFS_DEBUG_ACL = ${ENABLE_VFS_DEBUG_ACL}")
