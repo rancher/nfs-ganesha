@@ -65,6 +65,7 @@ extern "C" {
 #include "gsh_rpc.h"
 #include "nfs_fh.h"
 #include "log.h"
+#include "abstract_mem.h"
 
 typedef struct authsys_parms authsys_parms;
 #endif /* _AUTH_SYS_DEFINE_FOR_NFSv41 */
@@ -286,13 +287,7 @@ static inline utf8string *utf8string_dup(utf8string *d, const char *s, size_t l)
 		return d;
 	}
 
-	d->utf8string_val = (char *)malloc(l + 1);
-
-	if (d->utf8string_val == NULL) {
-		LogMallocFailure(__FILE__, __LINE__, __func__,
-				 "utf8string_dup");
-		abort();
-	}
+	d->utf8string_val = (char *)gsh_malloc(l + 1);
 	d->utf8string_len = l;
 	memcpy(d->utf8string_val, s, l + 1);
 	return d;
@@ -3979,6 +3974,7 @@ static inline bool xdr_utf8string_decode(XDR *xdrs, utf8string *objp,
 					 u_int maxsize)
 {
 	/* sp is the actual string pointer */
+	bool allocated_locally = false;
 	char *sp = objp->utf8string_val;
 	uint32_t size;
 	bool ret;
@@ -4009,22 +4005,16 @@ static inline bool xdr_utf8string_decode(XDR *xdrs, utf8string *objp,
 		return true;
 
 	if (!sp) {
-		sp = (char *)malloc(size + 1);
-
-		if (sp == NULL) {
-			LogMallocFailure(__FILE__, __LINE__, __func__,
-					 "utf8string_dup");
-			abort();
-		}
+		sp = (char *)gsh_malloc(size + 1);
+		allocated_locally = true;
 	}
 
 	ret = xdr_opaque_decode(xdrs, sp, size);
 
 	if (!ret) {
-		if (!objp->utf8string_val) {
+		if (allocated_locally)
 			/* Only free if we allocated */
-			free(sp);
-		}
+			gsh_free(sp);
 		return ret;
 	}
 
