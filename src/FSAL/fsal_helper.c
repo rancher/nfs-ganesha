@@ -532,43 +532,6 @@ fsal_status_t fsal_setattr(struct fsal_obj_handle *obj, bool bypass,
 
 	is_superuser = op_ctx->fsal_export->exp_ops.is_superuser(
 		op_ctx->fsal_export, &op_ctx->creds);
-	/* Test for the following condition from chown(2):
-	 *
-	 *     When the owner or group of an executable file are changed by an
-	 *     unprivileged user the S_ISUID and S_ISGID mode bits are cleared.
-	 *     POSIX does not specify whether this also should happen when
-	 *     root does the chown(); the Linux behavior depends on the kernel
-	 *     version.  In case of a non-group-executable file (i.e., one for
-	 *     which the S_IXGRP bit is not set) the S_ISGID bit indicates
-	 *     mandatory locking, and is not cleared by a chown().
-	 *
-	 */
-	if (!is_superuser &&
-	    (FSAL_TEST_MASK(attr->valid_mask, ATTR_OWNER) ||
-	     FSAL_TEST_MASK(attr->valid_mask, ATTR_GROUP)) &&
-	    ((current.mode & (S_IXOTH | S_IXUSR | S_IXGRP)) != 0) &&
-	    ((current.mode & (S_ISUID | S_ISGID)) != 0)) {
-		/* Non-priviledged user changing ownership on an executable
-		 * file with S_ISUID or S_ISGID bit set, need to be cleared.
-		 */
-		if (!FSAL_TEST_MASK(attr->valid_mask, ATTR_MODE)) {
-			/* Mode wasn't being set, so set it now, start with
-			 * the current attributes.
-			 */
-			attr->mode = current.mode;
-			FSAL_SET_MASK(attr->valid_mask, ATTR_MODE);
-		}
-
-		/* Don't clear S_ISGID if the file isn't group executable.
-		 * In that case, S_ISGID indicates mandatory locking and
-		 * is not cleared by chown.
-		 */
-		if ((current.mode & S_IXGRP) != 0)
-			attr->mode &= ~S_ISGID;
-
-		/* Clear S_ISUID. */
-		attr->mode &= ~S_ISUID;
-	}
 
 	/* Test for the following condition from chmod(2):
 	 *
@@ -586,6 +549,67 @@ fsal_status_t fsal_setattr(struct fsal_obj_handle *obj, bool bypass,
 	    fsal_not_in_group_list(current.group)) {
 		/* Clear S_ISGID */
 		attr->mode &= ~S_ISGID;
+	}
+
+	/* Test for the following condition from chown(2) if not operated
+	 * on a directory:
+	 *
+	 *     When the owner or group of an executable file are changed by an
+	 *     unprivileged user the S_ISUID and S_ISGID mode bits are cleared.
+	 *     POSIX does not specify whether this also should happen when
+	 *     root does the chown(); the Linux behavior depends on the kernel
+	 *     version.  In case of a non-group-executable file (i.e., one for
+	 *     which the S_IXGRP bit is not set) the S_ISGID bit indicates
+	 *     mandatory locking, and is not cleared by a chown().
+	 *
+	 * Since chown(2) and POSIX do not mention whether S_ISUID and S_ISGID
+	 * mode bits need to be cleared in case when chown() is called by root,
+	 * we retain the same behavior (i.e. clear) as linux kernel NFS server.
+	 *
+	 * Similarly, since chown(2) and POSIX do not mention whether S_ISUID
+	 * mode bit needs to be cleared in case of non-executable regular files,
+	 * we retain the same behavior (i.e. clear) as linux kernel NFS server.
+	 */
+	if ((obj->type != DIRECTORY) &&
+	    (FSAL_TEST_MASK(attr->valid_mask, ATTR_OWNER) ||
+	     FSAL_TEST_MASK(attr->valid_mask, ATTR_GROUP))) {
+		/* The 'current' fsal attrs are not populated during the above call
+		 * to fsal_check_setattr_perms() if the caller is root. Populating
+		 * it here.
+		 */
+		if (is_superuser) {
+			fsal_prepare_attrs(
+				&current,
+				op_ctx->fsal_export->exp_ops.fs_supported_attrs(
+					op_ctx->fsal_export) &
+					(ATTR_MODE));
+			status = obj->obj_ops->getattrs(obj, &current);
+			if (FSAL_IS_ERROR(status))
+				return status;
+		}
+		if ((current.mode & (S_ISUID | S_ISGID)) != 0) {
+			/* User changing ownership on an executable or
+			 * non-executable file with S_ISUID or S_ISGID
+			 * bit set, need to be cleared.
+			 */
+			if (!FSAL_TEST_MASK(attr->valid_mask, ATTR_MODE)) {
+				/* Mode wasn't being set, so set it now, start with
+				 * the current attributes.
+				 */
+				attr->mode = current.mode;
+				FSAL_SET_MASK(attr->valid_mask, ATTR_MODE);
+			}
+
+			/* Don't clear S_ISGID if the file isn't group
+			 * executable. In that case, S_ISGID indicates
+			 * mandatory locking and is not cleared by chown.
+			 */
+			if ((current.mode & S_IXGRP) != 0)
+				attr->mode &= ~S_ISGID;
+
+			/* Clear S_ISUID. */
+			attr->mode &= ~S_ISUID;
+		}
 	}
 
 	status = obj->obj_ops->setattr2(obj, bypass, state, attr);
