@@ -39,7 +39,7 @@
 #define VERSION_BYTES 8
 #define URL_MAX       2048
 #define PAYLOAD_MAX   2048
-#define LONGHORN_RECOVERY_BACKEND_URL "http://longhorn-recovery-backend:9600/v1/recoverybackend"
+#define LONGHORN_RECOVERY_BACKEND_URL "http://longhorn-recovery-backend:9503/v1/recoverybackend"
 
 static char recov_version[NAME_MAX];
 static pthread_rwlock_t recov_lock = PTHREAD_RWLOCK_INITIALIZER;
