@@ -538,7 +538,8 @@ void create_pseudofs(void)
 	struct gsh_export *export;
 
 	/* Initialize a root context */
-	init_op_context(&op_context, NULL, NULL, NULL, NFS_V4, 0, NFS_RELATED);
+	init_op_context(&op_context, NULL, NULL, NULL, NULL, NFS_V4, 0,
+			NFS_RELATED);
 	op_ctx->flags.pseudo_fsal_internal_lookup = true;
 
 	while (true) {
@@ -640,7 +641,7 @@ void pseudo_unmount_export(struct gsh_export *export)
 	get_gsh_export_ref(mounted_on_export);
 
 	init_op_context(&op_context, mounted_on_export,
-			mounted_on_export->fsal_export, NULL, NFS_V4, 0,
+			mounted_on_export->fsal_export, NULL, NULL, NFS_V4, 0,
 			NFS_RELATED);
 	op_ctx->flags.pseudo_fsal_internal_lookup = true;
 

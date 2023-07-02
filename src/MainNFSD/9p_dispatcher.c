@@ -307,7 +307,7 @@ static void _9p_execute(struct _9p_request_data *req9p)
 {
 	struct req_op_context op_context;
 
-	init_op_context(&op_context, NULL, NULL,
+	init_op_context(&op_context, NULL, NULL, NULL,
 			(sockaddr_t *)&req9p->pconn->addrpeer, 0, 0,
 			_9P_REQUEST);
 

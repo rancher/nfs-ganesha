@@ -4031,7 +4031,7 @@ void cancel_all_nlm_blocked(void)
 	struct req_op_context op_context;
 
 	/* Initialize context */
-	init_op_context(&op_context, NULL, NULL, NULL, 0, 0, NFS_RELATED);
+	init_op_context(&op_context, NULL, NULL, NULL, NULL, 0, 0, NFS_RELATED);
 
 	LogDebug(COMPONENT_STATE, "Cancel all blocked locks");
 

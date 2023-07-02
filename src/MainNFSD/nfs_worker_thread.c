@@ -984,7 +984,7 @@ static enum xprt_stat nfs_rpc_process_request(nfs_request_t *reqdata,
 	}
 
 	/* set up the request context */
-	init_op_context(&reqdata->op_context, NULL, NULL,
+	init_op_context(&reqdata->op_context, NULL, NULL, reqdata,
 			(sockaddr_t *)svc_getrpccaller(xprt),
 			reqdata->svc.rq_msg.cb_vers, 0, NFS_REQUEST);
 

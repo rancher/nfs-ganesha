@@ -423,7 +423,7 @@ void _9p_cleanup_fids(struct _9p_conn *conn)
 	 * Note we only need it if there is a non-null fid,
 	 * might be worth optimizing for huge clusters
 	 */
-	init_op_context(&op_context, NULL, NULL, NULL, 0, 0, _9P_REQUEST);
+	init_op_context(&op_context, NULL, NULL, NULL, NULL, 0, 0, _9P_REQUEST);
 
 	for (i = 0; i < _9P_FID_PER_CONN; i++) {
 		if (conn->fids[i]) {

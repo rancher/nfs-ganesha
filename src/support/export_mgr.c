@@ -644,7 +644,8 @@ bool mount_gsh_export(struct gsh_export *exp)
 	bool rc = true;
 
 	/* Initialize op_context */
-	init_op_context(&op_context, NULL, NULL, NULL, NFS_V4, 0, NFS_RELATED);
+	init_op_context(&op_context, NULL, NULL, NULL, NULL, NFS_V4, 0,
+			NFS_RELATED);
 
 	if (!pseudo_mount_export(exp))
 		rc = false;
@@ -662,7 +663,8 @@ void unmount_gsh_export(struct gsh_export *exp)
 	struct req_op_context op_context;
 
 	/* Initialize op_context */
-	init_op_context(&op_context, NULL, NULL, NULL, NFS_V4, 0, NFS_RELATED);
+	init_op_context(&op_context, NULL, NULL, NULL, NULL, NFS_V4, 0,
+			NFS_RELATED);
 
 	pseudo_unmount_export_tree(exp);
 	release_op_context();
@@ -865,8 +867,8 @@ void remove_all_exports(void)
 	 */
 	export = get_gsh_export_by_pseudo("/", true);
 
-	init_op_context(&op_context, export, export->fsal_export, NULL, NFS_V4,
-			0, NFS_RELATED);
+	init_op_context(&op_context, export, export->fsal_export, NULL, NULL,
+			NFS_V4, 0, NFS_RELATED);
 
 	/* Clean up the whole PseudoFS */
 	pseudo_unmount_export_tree(export);
@@ -915,7 +917,8 @@ void prune_defunct_exports(uint64_t generation)
 	 * Initialize op_context, we use NFSv4 types here to make paths show
 	 * up sanely in the logs.
 	 */
-	init_op_context(&op_context, NULL, NULL, NULL, NFS_V4, 0, NFS_RELATED);
+	init_op_context(&op_context, NULL, NULL, NULL, NULL, NFS_V4, 0,
+			NFS_RELATED);
 
 	(void)foreach_gsh_export(prune_defunct_export, true, &generation);
 

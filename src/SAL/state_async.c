@@ -75,7 +75,7 @@ static void state_blocked_lock_caller(struct fridgethr_context *ctx)
 		get_gsh_export_ref(export);
 		/* Initialize a root context, need to get a valid export. */
 		init_op_context(&op_context, export, export->fsal_export, NULL,
-				0, 0, UNKNOWN_REQUEST);
+				NULL, 0, 0, UNKNOWN_REQUEST);
 		set_op_ctx = true;
 	}
 
@@ -108,8 +108,8 @@ static void state_blocked_lock_cancel(struct fridgethr_context *ctx)
 	}
 	get_gsh_export_ref(export);
 	/* Initialize a root context, need to get a valid export. */
-	init_op_context(&op_context, export, export->fsal_export, NULL, 0, 0,
-			UNKNOWN_REQUEST);
+	init_op_context(&op_context, export, export->fsal_export, NULL, NULL, 0,
+			0, UNKNOWN_REQUEST);
 	state_status_t ret = state_cancel_blocked(lock_entry);
 
 	LogFullDebug(COMPONENT_STATE, "unlock returned %d", ret);
@@ -143,8 +143,8 @@ static void test_blocking_lock_eligibility(struct fridgethr_context *ctx)
 	}
 	get_gsh_export_ref(export);
 	/* Initialize a root context, needed to get a valid export. */
-	init_op_context(&op_context, export, export->fsal_export, NULL, 0, 0,
-			UNKNOWN_REQUEST);
+	init_op_context(&op_context, export, export->fsal_export, NULL, NULL, 0,
+			0, UNKNOWN_REQUEST);
 
 	state_status_t lock_test_status =
 		state_test(lock_entry->sle_obj, lock_entry->sle_state,

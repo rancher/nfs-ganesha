@@ -3435,15 +3435,16 @@ void discard_op_context_export(struct saved_export_context *saved)
  */
 static uint32_t op_id;
 void init_op_context(struct req_op_context *ctx, struct gsh_export *exp,
-		     struct fsal_export *fsal_exp, sockaddr_t *caller_data,
-		     uint32_t nfs_vers, uint32_t nfs_minorvers,
-		     enum request_type req_type)
+		     struct fsal_export *fsal_exp, nfs_request_t *nfs_reqdata,
+		     sockaddr_t *caller_data, uint32_t nfs_vers,
+		     uint32_t nfs_minorvers, enum request_type req_type)
 {
 	/* Initialize ctx.
 	 * Note that a zeroed creds works just fine as root creds.
 	 */
 	memset(ctx, 0, sizeof(*ctx));
 
+	ctx->nfs_reqdata = nfs_reqdata;
 	ctx->saved_op_ctx = op_ctx;
 	op_ctx = ctx;
 

@@ -98,15 +98,15 @@ void init_ctx_refstr(void);
 void destroy_ctx_refstr(void);
 
 void init_op_context(struct req_op_context *ctx, struct gsh_export *exp,
-		     struct fsal_export *fsal_exp, sockaddr_t *caller_data,
-		     uint32_t nfs_vers, uint32_t nfs_minorvers,
-		     enum request_type req_type);
+		     struct fsal_export *fsal_exp, nfs_request_t *nfs_reqdata,
+		     sockaddr_t *caller_data, uint32_t nfs_vers,
+		     uint32_t nfs_minorvers, enum request_type req_type);
 
 static inline void init_op_context_simple(struct req_op_context *ctx,
 					  struct gsh_export *exp,
 					  struct fsal_export *fsal_exp)
 {
-	init_op_context(ctx, exp, fsal_exp, NULL, 0, 0, UNKNOWN_REQUEST);
+	init_op_context(ctx, exp, fsal_exp, NULL, NULL, 0, 0, UNKNOWN_REQUEST);
 }
 
 void release_op_context(void);

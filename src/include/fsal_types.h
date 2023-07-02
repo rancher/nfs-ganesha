@@ -43,6 +43,8 @@
 #include "uid2grp.h"
 #include "nfsv41.h"
 
+typedef struct nfs_request nfs_request_t;
+
 /* Cookie to be used in FSAL_ListXAttrs() to bypass RO xattr */
 #define FSAL_XATTR_RW_COOKIE (~0)
 
