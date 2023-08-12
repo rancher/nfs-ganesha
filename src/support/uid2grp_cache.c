@@ -507,6 +507,7 @@ void uid2grp_remove_expired_by_uname(const struct gsh_buffdesc *name)
 void uid2grp_clear_cache(void)
 {
 	struct avltree_node *node;
+	int removed_group_data_entries = 0;
 
 	PTHREAD_RWLOCK_wrlock(&uid2grp_user_lock);
 
@@ -514,11 +515,14 @@ void uid2grp_clear_cache(void)
 		struct cache_info *info = avltree_container_of(
 			node, struct cache_info, uname_node);
 		uid2grp_remove_user(info);
+		removed_group_data_entries++;
 	}
-
 	assert(avltree_first(&uid_tree) == NULL);
 
 	PTHREAD_RWLOCK_unlock(&uid2grp_user_lock);
+	LogDebug(COMPONENT_IDMAPPER,
+		 "Total group-data cache entries removed: %d",
+		 removed_group_data_entries);
 }
 
 /** @} */

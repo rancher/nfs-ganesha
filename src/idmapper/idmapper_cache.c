@@ -777,6 +777,9 @@ bool idmapper_lookup_by_gid(const gid_t gid, const struct gsh_buffdesc **name)
 void idmapper_clear_cache(void)
 {
 	struct avltree_node *node;
+	int removed_uname_entries = 0;
+	int removed_uid_entries = 0;
+	int removed_group_entries = 0;
 
 	PTHREAD_RWLOCK_wrlock(&idmapper_user_lock);
 	PTHREAD_RWLOCK_wrlock(&idmapper_group_lock);
@@ -790,9 +793,10 @@ void idmapper_clear_cache(void)
 
 		user = avltree_container_of(node, struct cache_user,
 					    uname_node);
+		removed_uid_entries += (user->in_uidtree ? 1 : 0);
+		removed_uname_entries++;
 		remove_cache_user(user);
 	}
-
 	assert(avltree_first(&uid_tree) == NULL);
 
 	for (node = avltree_first(&gname_tree); node != NULL;
@@ -801,13 +805,19 @@ void idmapper_clear_cache(void)
 
 		group = avltree_container_of(node, struct cache_group,
 					     gname_node);
+		removed_group_entries++;
 		remove_cache_group(group);
 	}
-
 	assert(avltree_first(&gid_tree) == NULL);
 
 	PTHREAD_RWLOCK_unlock(&idmapper_group_lock);
 	PTHREAD_RWLOCK_unlock(&idmapper_user_lock);
+
+	LogInfo(COMPONENT_IDMAPPER,
+		"Total entries removed per cache: "
+		"uname cache: %d uid cache: %d group cache: %d",
+		removed_uname_entries, removed_uid_entries,
+		removed_group_entries);
 }
 
 /**
