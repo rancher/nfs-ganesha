@@ -2120,6 +2120,80 @@ void nfs41_foreach_client_callback(bool (*cb)(nfs_client_id_t *cl, void *state),
 	}
 }
 
+/**
+ * @brief For the given gsh_client, get the nfsv41-client and destroy all
+ * its connections
+ *
+ * @param gsh_client    [IN] gsh_client to disconnect
+ *
+ * @note This function's implementation is not optimal, and has a
+ * high performance cost. It must be used only for debug or administrative
+ * purposes.
+ */
+
+int destroy_all_client_connections(const struct gsh_client *gsh_client)
+{
+	uint32_t i;
+	hash_table_t *ht = ht_confirmed_client_id;
+	struct rbt_head *head_rbt;
+	struct hash_data *pdata = NULL;
+	struct rbt_node *pn;
+	nfs_client_id_t *clientid;
+	char client_str[LOG_BUFF_LEN] = "\0";
+	struct display_buffer dspbuf = { sizeof(client_str), client_str,
+					 client_str };
+	int total_connections_destroyed = 0;
+
+	/* For each bucket of the hashtable */
+	for (i = 0; i < ht->parameter.index_size; i++) {
+		head_rbt = &(ht->partitions[i].rbt);
+
+		/* acquire mutex */
+		PTHREAD_RWLOCK_rdlock(&(ht->partitions[i].ht_lock));
+
+		/* go through all entries in the red-black-tree */
+		RBT_LOOP(head_rbt, pn)
+		{
+			pdata = RBT_OPAQ(pn);
+			clientid = pdata->val.addr;
+			RBT_INCREMENT(pn);
+
+			if (clientid->cid_minorversion == 0 ||
+			    clientid->gsh_client != gsh_client) {
+				continue;
+			}
+			display_client_id_rec(&dspbuf, clientid);
+			LogInfo(COMPONENT_CLIENTID,
+				"Found nfsv41-client: %s for input gsh_client: %s",
+				client_str, gsh_client->hostaddr_str);
+			display_reset_buffer(&dspbuf);
+
+			struct glist_head *curr_node, *next_node;
+
+			pthread_mutex_lock(&clientid->cid_mutex);
+
+			glist_for_each_safe(
+				curr_node, next_node,
+				&clientid->cid_cb.v41.cb_session_list)
+			{
+				nfs41_session_t *const session =
+					glist_entry(curr_node, nfs41_session_t,
+						    session_link);
+
+				total_connections_destroyed +=
+					nfs41_Session_Destroy_All_Connections(
+						session);
+			}
+			pthread_mutex_unlock(&clientid->cid_mutex);
+		}
+		PTHREAD_RWLOCK_unlock(&(ht->partitions[i].ht_lock));
+	}
+	LogInfo(COMPONENT_CLIENTID,
+		"Destroyed %d connections for gsh-client: %s",
+		total_connections_destroyed, gsh_client->hostaddr_str);
+	return total_connections_destroyed;
+}
+
 static hash_parameter_t cr_hash_param = {
 	.index_size = PRIME_STATE,
 	.hash_func_key = client_record_value_hash_func,

@@ -314,6 +314,8 @@ void free_client_id(nfs_client_id_t *clientid);
 void nfs41_foreach_client_callback(bool (*cb)(nfs_client_id_t *cl, void *state),
 				   void *state);
 
+int destroy_all_client_connections(const struct gsh_client *);
+
 bool client_id_has_state(nfs_client_id_t *clientid);
 
 int32_t inc_client_id_ref(nfs_client_id_t *clientid);
@@ -366,6 +368,8 @@ void nfs41_Session_Add_Connection(nfs41_session_t *, SVCXPRT *);
 void nfs41_Session_Remove_Connection(nfs41_session_t *, SVCXPRT *);
 
 void nfs41_Session_Destroy_Backchannel_For_Xprt(nfs41_session_t *, SVCXPRT *);
+
+int nfs41_Session_Destroy_All_Connections(nfs41_session_t *);
 
 /******************************************************************************
  *

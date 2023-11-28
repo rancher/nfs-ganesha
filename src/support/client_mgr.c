@@ -344,6 +344,25 @@ static bool arg_ipaddr(DBusMessageIter *args, sockaddr_t *sp, char **errormsg)
 	return success;
 }
 
+/** @brief lookup gsh_client from input ip-address
+ */
+
+static struct gsh_client *lookup_client(DBusMessageIter *args, char **errormsg)
+{
+	sockaddr_t sockaddr;
+	struct gsh_client *client = NULL;
+	bool success = true;
+
+	success = arg_ipaddr(args, &sockaddr, errormsg);
+
+	if (success) {
+		client = get_gsh_client(&sockaddr, true);
+		if (client == NULL)
+			*errormsg = "Client IP address not found";
+	}
+	return client;
+}
+
 /* DBUS interface(s)
  */
 
@@ -505,6 +524,41 @@ static struct gsh_dbus_method cltmgr_show_clients = {
 	.args = { TIMESTAMP_REPLY, CLIENTS_REPLY, END_ARG_LIST }
 };
 
+static bool disconnect_nfsv41_client(DBusMessageIter *args, DBusMessage *reply,
+				     DBusError *error)
+{
+	sockaddr_t sockaddr;
+	bool success = true;
+	char *errormsg = "OK";
+	DBusMessageIter iter;
+	int connections_destroyed = 0;
+
+	dbus_message_iter_init_append(reply, &iter);
+	success = arg_ipaddr(args, &sockaddr, &errormsg);
+
+	struct gsh_client *const client = lookup_client(args, &errormsg);
+
+	if (client == NULL) {
+		success = false;
+	} else {
+		LogInfo(COMPONENT_NFS_V4,
+			"Found gsh-client for input ip-address. Now disconnecting it");
+		connections_destroyed = destroy_all_client_connections(client);
+	}
+
+	gsh_dbus_status_reply(&iter, success, errormsg);
+	dbus_message_iter_append_basic(&iter, DBUS_TYPE_INT32,
+				       &connections_destroyed);
+	return true;
+}
+
+static struct gsh_dbus_method cltmgr_disconnect_nfsv41_client = {
+	.name = "DisconnectNfsv41Client",
+	.method = disconnect_nfsv41_client,
+	.args = { IPADDR_ARG, STATUS_REPLY, TOTAL_DESTROYED_CONNECTIONS_REPLY,
+		  END_ARG_LIST }
+};
+
 /* Reset Client specific stats counters
  */
 void reset_client_stats(void)
@@ -546,7 +600,8 @@ void reset_clnt_allops_stats(void)
 }
 
 static struct gsh_dbus_method *cltmgr_client_methods[] = {
-	&cltmgr_add_client, &cltmgr_remove_client, &cltmgr_show_clients, NULL
+	&cltmgr_add_client, &cltmgr_remove_client, &cltmgr_show_clients,
+	&cltmgr_disconnect_nfsv41_client, NULL
 };
 
 static struct gsh_dbus_interface cltmgr_client_table = {
@@ -558,25 +613,6 @@ static struct gsh_dbus_interface cltmgr_client_table = {
 
 /* org.ganesha.nfsd.clientstats interface
  */
-
-/* DBUS client manager stats helpers
- */
-
-static struct gsh_client *lookup_client(DBusMessageIter *args, char **errormsg)
-{
-	sockaddr_t sockaddr;
-	struct gsh_client *client = NULL;
-	bool success = true;
-
-	success = arg_ipaddr(args, &sockaddr, errormsg);
-
-	if (success) {
-		client = get_gsh_client(&sockaddr, true);
-		if (client == NULL)
-			*errormsg = "Client IP address not found";
-	}
-	return client;
-}
 
 /**
  * DBUS method to get client IO ops statistics

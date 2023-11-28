@@ -227,6 +227,12 @@ struct auth_stats {
 		.direction = "out"                               \
 	}
 
+#define TOTAL_DESTROYED_CONNECTIONS_REPLY                     \
+	{                                                     \
+		.name = "connections_destroyed", .type = "i", \
+		.direction = "out"                            \
+	}
+
 /* Bits for introspect arg structures
  */
 

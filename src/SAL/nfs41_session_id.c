@@ -730,4 +730,62 @@ no_backchannel:
 		 session_str);
 }
 
+/**
+ * @brief Destroy all session connection-xprts
+ *
+ * @return number of connections destroyed for the session
+ */
+int nfs41_Session_Destroy_All_Connections(nfs41_session_t *session)
+{
+	struct glist_head *curr_node, *next_node;
+	struct glist_head connections_copy;
+
+	glist_init(&connections_copy);
+
+	/* Create a duplicate xprt list to avoid conflict with conn_lock
+	 * taken during SVC_DESTROY
+	 */
+	PTHREAD_RWLOCK_rdlock(&session->conn_lock);
+	int num_connections = session->num_conn;
+
+	LogInfo(COMPONENT_SESSIONS, "Found %d connections for the session",
+		num_connections);
+
+	glist_for_each(curr_node, &session->connection_xprts)
+	{
+		connection_xprt_t *const curr_entry =
+			glist_entry(curr_node, connection_xprt_t, node);
+		connection_xprt_t *const new_entry =
+			gsh_malloc(sizeof(connection_xprt_t));
+
+		new_entry->xprt = curr_entry->xprt;
+		glist_add_tail(&connections_copy, &new_entry->node);
+
+		/* Ref the xprt to prevent it from being destroyed externally */
+		SVC_REF(new_entry->xprt, SVC_REF_FLAG_NONE);
+	}
+	PTHREAD_RWLOCK_unlock(&session->conn_lock);
+
+	/* Now for each xprt, destroy it */
+	glist_for_each_safe(curr_node, next_node, &connections_copy)
+	{
+		connection_xprt_t *const curr_entry =
+			glist_entry(curr_node, connection_xprt_t, node);
+
+		LogInfo(COMPONENT_SESSIONS,
+			"Destroying xprt with FD %d for the session",
+			curr_entry->xprt->xp_fd);
+
+		/* Destroy the xprt */
+		SVC_DESTROY(curr_entry->xprt);
+
+		/* Release the ref we acquired above */
+		SVC_RELEASE(curr_entry->xprt, SVC_RELEASE_FLAG_NONE);
+
+		glist_del(&curr_entry->node);
+		gsh_free(curr_entry);
+	}
+	return num_connections;
+}
+
 /** @} */
