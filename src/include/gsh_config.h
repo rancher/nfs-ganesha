@@ -586,20 +586,6 @@ typedef struct nfs_core_param {
  */
 #define DELEG_RECALL_RETRY_DELAY_DEFAULT 1
 
-enum recovery_backend {
-	RECOVERY_BACKEND_FS,
-	RECOVERY_BACKEND_FS_NG,
-	RECOVERY_BACKEND_RADOS_KV,
-	RECOVERY_BACKEND_RADOS_NG,
-	RECOVERY_BACKEND_RADOS_CLUSTER,
-	RECOVERY_BACKEND_LONGHORN,
-};
-
-/**
- * @brief Default value of recovery_backend.
- */
-#define RECOVERY_BACKEND_DEFAULT RECOVERY_BACKEND_FS
-
 /**
  * @brief NFSv4 minor versions
  */
