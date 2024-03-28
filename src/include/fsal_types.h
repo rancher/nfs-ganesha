@@ -978,6 +978,8 @@ struct fsal_fd {
 	struct glist_head fd_lru;
 	/** work_mutex protects fd work */
 	pthread_mutex_t work_mutex;
+	/** condition to signal when io work may commence */
+	pthread_cond_t io_cond;
 	/** condition to signal when fd work may commence */
 	pthread_cond_t work_cond;
 	/** Indicate if should be closed on complete. */
@@ -1015,6 +1017,7 @@ static inline void init_fsal_fd(struct fsal_fd *fsal_fd,
 		 */
 		PTHREAD_MUTEX_init(&fsal_fd->work_mutex, NULL);
 		PTHREAD_COND_init(&fsal_fd->work_cond, NULL);
+		PTHREAD_COND_init(&fsal_fd->io_cond, NULL);
 	}
 	fsal_fd->fd_type = fd_type;
 	fsal_fd->fsal_export = fsal_export;
@@ -1028,6 +1031,7 @@ static inline void destroy_fsal_fd(struct fsal_fd *fsal_fd)
 		 */
 		PTHREAD_MUTEX_destroy(&fsal_fd->work_mutex);
 		PTHREAD_COND_destroy(&fsal_fd->work_cond);
+		PTHREAD_COND_destroy(&fsal_fd->io_cond);
 	}
 }
 
