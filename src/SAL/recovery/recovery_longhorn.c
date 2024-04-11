@@ -426,7 +426,9 @@ static int longhorn_recov_init(void)
 		&response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to initialize recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
 		return -EINVAL;
 	}
 
@@ -462,7 +464,9 @@ static void longhorn_recov_end_grace(void)
 	res = http_call(HTTP_PUT, url, payload, strlen(payload) + 1, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to end grace period in recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
 	}
 }
 
@@ -511,7 +515,9 @@ static void longhorn_add_clid(nfs_client_id_t *clientid)
 	res = http_call(HTTP_PUT, url, payload, strlen(payload) + 1, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to create client in recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
 	}
 
 	curl_easy_cleanup(curl);
@@ -559,7 +565,9 @@ static void longhorn_rm_clid(nfs_client_id_t *clientid)
 	res = http_call(HTTP_DELETE, url, NULL, 0, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to remove client in recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
 	}
 
 	curl_easy_cleanup(curl);
@@ -636,7 +644,9 @@ static void longhorn_read_recov_clids(nfs_grace_start_t *gsp,
 	res = http_call(HTTP_GET, url, NULL, 0, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to read clients from recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
 		return;
 	}
 
@@ -700,7 +710,9 @@ static void longhorn_add_revoke_fh(nfs_client_id_t *delr_clid, nfs_fh4 *delr_han
 	res = http_call(HTTP_PUT, url, payload, strlen(payload) + 1, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to add revoke fh in recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
 	}
 
 	curl_easy_cleanup(curl);
