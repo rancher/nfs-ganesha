@@ -426,10 +426,13 @@ static int longhorn_recov_init(void)
 		&response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to initialize recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
+		free(response);
 		return -EINVAL;
 	}
-
+	free(response);
 	return 0;
 }
 
@@ -464,6 +467,7 @@ static void longhorn_recov_end_grace(void)
 	if (res != 0) {
 		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
 	}
+	free(response);
 }
 
 static void longhorn_add_clid(nfs_client_id_t *clientid)
@@ -511,9 +515,12 @@ static void longhorn_add_clid(nfs_client_id_t *clientid)
 	res = http_call(HTTP_PUT, url, payload, strlen(payload) + 1, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to create client in recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
+		free(response);
 	}
-
+	free(response);
 	curl_easy_cleanup(curl);
 }
 
@@ -543,6 +550,7 @@ static void longhorn_rm_clid(nfs_client_id_t *clientid)
 		clientid->cid_recov_tag, strlen(clientid->cid_recov_tag));
 	assert(encoded_cid_recov_tag != NULL);
 
+	gsh_free(clientid->cid_recov_tag);
 	clientid->cid_recov_tag = NULL;
 
 	LogEvent(COMPONENT_CLIENTID,
@@ -562,51 +570,52 @@ static void longhorn_rm_clid(nfs_client_id_t *clientid)
 		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
 	}
 
+	free(response);
 	curl_easy_cleanup(curl);
 }
 
 static int read_clids(char *response, add_clid_entry_hook add_clid_entry)
 {
-        struct json_object *obj = NULL, *clients_obj = NULL;
-		size_t num_clids = 0;
-		int error = -1;
+	struct json_object *obj = NULL, *clients_obj = NULL;
+	size_t num_clids = 0;
+	int error = -1;
 
-		LogEvent(COMPONENT_CLIENTID, "response=%s", response);
+	LogEvent(COMPONENT_CLIENTID, "response=%s", response);
 		
-		obj = json_tokener_parse(response);
+	obj = json_tokener_parse(response);
+	if (!obj) {
+		LogEvent(COMPONENT_CLIENTID, "Failed to parse \"%s\": %s", response, strerror(errno));
+		goto end;
+	}
+
+	clients_obj = json_object_object_get(obj, "clients");
+	if (!clients_obj) {
+	    error = 0;
+		LogEvent(COMPONENT_CLIENTID, "clients is empty");
+		goto end;
+	}
+
+	num_clids = json_object_array_length(clients_obj);
+	for (size_t i = 0; i < num_clids; i++) {
+		struct json_object *obj = NULL;
+		const char *clid = NULL;
+		clid_entry_t *ent = NULL;
+
+		obj = json_object_array_get_idx(clients_obj, i);
 		if (!obj) {
-			LogEvent(COMPONENT_CLIENTID, "Failed to parse \"%s\": %s", response, strerror(errno));
+			LogEvent(COMPONENT_CLIENTID, "Failed get client object: %s", strerror(errno));
 			goto end;
 		}
 
-		clients_obj = json_object_object_get(obj, "clients");
-		if (!clients_obj) {
-			error = 0;
-			LogEvent(COMPONENT_CLIENTID, "clients is empty");
-			goto end;
-		}
+		clid = json_object_get_string(obj);
+		ent = add_clid_entry((char *)clid);
+		LogEvent(COMPONENT_CLIENTID, "Added %s to clid list", ent->cl_name);
+	}
 
-		num_clids = json_object_array_length(clients_obj);
-		for (size_t i = 0; i < num_clids; i++) {
-			struct json_object *obj = NULL;
-			const char *clid = NULL;
-			clid_entry_t *ent = NULL;
-
-			obj = json_object_array_get_idx(clients_obj, i);
-			if (!obj) {
-				LogEvent(COMPONENT_CLIENTID, "Failed get client object: %s", strerror(errno));
-				goto end;
-			}
-
-			clid = json_object_get_string(obj);
-			ent = add_clid_entry((char *)clid);
-			LogEvent(COMPONENT_CLIENTID, "Added %s to clid list", ent->cl_name);
-		}
-
-		error = 0;
+	error = 0;
 end:
-		json_object_put(obj);
-		return error;
+	json_object_put(obj);
+	return error;
 }
 
 static void longhorn_read_recov_clids(nfs_grace_start_t *gsp,
@@ -636,11 +645,15 @@ static void longhorn_read_recov_clids(nfs_grace_start_t *gsp,
 	res = http_call(HTTP_GET, url, NULL, 0, &response, &response_size);
 	PTHREAD_RWLOCK_unlock(&recov_lock);
 	if (res != 0) {
-		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
+		LogEvent(COMPONENT_CLIENTID,
+			"Failed to read clients from recovery backend. "
+			"HTTP call error: res=%d (%s)", res, response);
+		free(response);
 		return;
 	}
 
 	read_clids(response, add_clid_entry);
+	free(response);
 }
 
 static void longhorn_add_revoke_fh(nfs_client_id_t *delr_clid, nfs_fh4 *delr_handle)
@@ -702,7 +715,7 @@ static void longhorn_add_revoke_fh(nfs_client_id_t *delr_clid, nfs_fh4 *delr_han
 	if (res != 0) {
 		LogFatal(COMPONENT_CLIENTID, "HTTP call error: res=%d (%s)", res, response);
 	}
-
+	free(response);
 	curl_easy_cleanup(curl);
 }
 
