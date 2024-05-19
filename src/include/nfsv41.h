@@ -2106,6 +2106,7 @@ enum state_protect_how4 {
 	SP4_NONE = 0,
 	SP4_MACH_CRED = 1,
 	SP4_SSV = 2,
+	SP4_COUNT = 3,
 };
 typedef enum state_protect_how4 state_protect_how4;
 
@@ -8127,8 +8128,8 @@ static inline bool xdr_nfs_argop4(XDR *xdrs, nfs_argop4 *objp)
 					      .write = 0 };
 	struct nfs_request_lookahead *lkhd =
 		xdrs->x_public ?
-			(struct nfs_request_lookahead *)xdrs->x_public :
-			&slhd;
+			      (struct nfs_request_lookahead *)xdrs->x_public :
+			      &slhd;
 
 	if (!xdr_nfs_opnum4(xdrs, &objp->argop))
 		return false;

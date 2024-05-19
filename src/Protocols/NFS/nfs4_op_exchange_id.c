@@ -39,6 +39,7 @@
 #include "nfs_proto_tools.h"
 #include "sal_functions.h"
 #include "nfs_creds.h"
+#include "sal_metrics.h"
 
 #include "gsh_lttng/gsh_lttng.h"
 #if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
@@ -390,6 +391,9 @@ enum nfs_req_result nfs4_op_exchange_id(struct nfs_argop4 *op,
 
 		goto out;
 	}
+
+	sal_metrics__client_state_protection(
+		arg_EXCHANGE_ID4->eia_state_protect.spa_how);
 
 return_ok:
 

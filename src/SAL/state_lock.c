@@ -54,6 +54,7 @@
 #if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
 #include "gsh_lttng/generated_traces/lock.h"
 #endif
+#include "sal_metrics.h"
 
 /**
  * @page state_lock_entry_locking state_lock_entry_t locking rule
@@ -293,9 +294,9 @@ static void log_entry_ref_count(const char *reason, state_lock_entry_t *le,
 			str_protocol(le->sle_protocol),
 			str_blocked(le->sle_blocked), le->sle_block_data,
 			le->sle_block_data ?
-				str_block_type(
+				      str_block_type(
 					le->sle_block_data->sbd_block_type) :
-				str_block_type(STATE_BLOCK_NONE),
+				      str_block_type(STATE_BLOCK_NONE),
 			le->sle_state, refcount, owner);
 	}
 }
@@ -586,6 +587,10 @@ create_state_lock_entry(struct fsal_obj_handle *obj, struct gsh_export *export,
 	PTHREAD_MUTEX_unlock(&all_locks_mutex);
 #endif
 
+	if (blocked == STATE_NON_BLOCKING)
+		sal_metrics__locks_inc(SAL_METRICS_HOLDERS);
+	else
+		sal_metrics__locks_inc(SAL_METRICS_WAITERS);
 	return new_entry;
 }
 
@@ -628,7 +633,7 @@ void lock_entry_dec_ref(state_lock_entry_t *lock_entry)
 	int32_t refcount = atomic_dec_int32_t(&lock_entry->sle_ref_count);
 
 	LogEntryRefCount(refcount != 0 ? "Decrement sle_ref_count" :
-					 "Decrement sle_ref_count and freeing",
+					       "Decrement sle_ref_count and freeing",
 			 lock_entry, refcount);
 
 	assert(refcount >= 0);
@@ -674,6 +679,11 @@ void lock_entry_dec_ref(state_lock_entry_t *lock_entry)
 			dec_state_t_ref(lock_entry->sle_state);
 			lock_entry->sle_state = NULL;
 		}
+
+		if (lock_entry->sle_blocked == STATE_NON_BLOCKING)
+			sal_metrics__locks_dec(SAL_METRICS_HOLDERS);
+		else
+			sal_metrics__locks_dec(SAL_METRICS_WAITERS);
 
 		lock_entry->sle_obj->obj_ops->put_ref(lock_entry->sle_obj);
 		put_gsh_export(lock_entry->sle_export);
@@ -1675,6 +1685,12 @@ void grant_blocked_lock_immediate(struct state_hdl *ostate,
 		}
 	}
 
+	if (lock_entry->sle_blocked != STATE_NON_BLOCKING) {
+		/* Lock granted. Increase holders and decrease waiters */
+		sal_metrics__locks_inc(SAL_METRICS_HOLDERS);
+		sal_metrics__locks_dec(SAL_METRICS_WAITERS);
+	}
+
 	/* Mark lock as granted */
 	lock_entry->sle_blocked = STATE_NON_BLOCKING;
 
@@ -1746,6 +1762,10 @@ void state_complete_grant(state_cookie_entry_t *cookie_entry)
 
 		/* A lock downgrade could unblock blocked locks */
 		grant_blocked_locks(obj->state_hdl);
+
+		/* Lock granted. Increase holders and decrease waiters */
+		sal_metrics__locks_inc(SAL_METRICS_HOLDERS);
+		sal_metrics__locks_dec(SAL_METRICS_WAITERS);
 	}
 
 	/* Free cookie and unblock lock.
@@ -2229,12 +2249,12 @@ state_status_t do_lock_op(struct fsal_obj_handle *obj, state_t *state,
 		"Reasons to quick exit fso_lock_support=%s fso_lock_support_async_block=%s overlap=%s",
 		fsal_export->exp_ops.fs_supports(fsal_export,
 						 fso_lock_support) ?
-			"yes" :
-			"no",
+			      "yes" :
+			      "no",
 		fsal_export->exp_ops.fs_supports(fsal_export,
 						 fso_lock_support_async_block) ?
-			"yes" :
-			"no",
+			      "yes" :
+			      "no",
 		overlap ? "yes" : "no");
 	if (!fsal_export->exp_ops.fs_supports(fsal_export, fso_lock_support) ||
 	    (!fsal_export->exp_ops.fs_supports(fsal_export,
@@ -2937,8 +2957,8 @@ recheck_for_conflicting_entries:
 		} else if (allow) {
 			/* Actively poll for the lock only for nlm locks. */
 			block_data->sbd_block_type = (protocol == LOCK_NLM) ?
-							     STATE_BLOCK_ASYNC :
-							     STATE_BLOCK_POLL;
+								   STATE_BLOCK_ASYNC :
+								   STATE_BLOCK_POLL;
 		} else {
 			/* Ganesha will attempt to grant the lock when
 			 * a conflicting lock is released.

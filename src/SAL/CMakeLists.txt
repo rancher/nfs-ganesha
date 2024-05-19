@@ -22,6 +22,7 @@
 ########### next target ###############
 
 SET(sal_STAT_SRCS
+   sal_metrics.c
    state_async.c
    state_lock.c
    state_share.c

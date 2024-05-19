@@ -31,6 +31,7 @@
 #include "xprt_handler.h"
 #include "nfs_core.h"
 #include "sal_functions.h"
+#include "sal_metrics.h"
 
 #include "gsh_xprt_tracepoint.h"
 #if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
@@ -59,6 +60,7 @@ void init_custom_data_for_xprt(SVCXPRT *xprt)
 	xprt_data->nfs41_sessions_holder.num_sessions = 0;
 	xprt->xp_u1 = (void *)xprt_data;
 	xprt_data->status = ASSOCIATED_TO_XPRT;
+	sal_metrics__xprt_custom_data_status(ASSOCIATED_TO_XPRT);
 
 	display_xprt_sockaddr(&db, xprt);
 	LogDebug(COMPONENT_XPRT,
@@ -105,12 +107,16 @@ bool add_nfs41_session_to_xprt(SVCXPRT *xprt, nfs41_session_t *session)
 			TP_SESSION(session->session_id));
 		dec_session_ref(session);
 		gsh_free(new_entry);
+		sal_metrics__xprt_association_denied();
 		return false;
 	}
 
 	glist_add_tail(&xprt_data->nfs41_sessions_holder.sessions,
 		       &new_entry->node);
+	const uint8_t num_sessions =
+		++xprt_data->nfs41_sessions_holder.num_sessions;
 	PTHREAD_RWLOCK_unlock(&xprt_data->nfs41_sessions_holder.sessions_lock);
+	sal_metrics__xprt_sessions(num_sessions);
 
 	GSH_XPRT_AUTO_TRACEPOINT(xprt_handler, add_nfs41_session, TRACE_INFO,
 				 xprt, "Added nfs41 session: {}",
@@ -151,7 +157,11 @@ void remove_nfs41_session_from_xprt(SVCXPRT *xprt, nfs41_session_t *session)
 		}
 	}
 	sessions_holder->num_sessions -= found_session_count;
+	const uint8_t num_sessions = sessions_holder->num_sessions;
 	PTHREAD_RWLOCK_unlock(&sessions_holder->sessions_lock);
+
+	if (found_session_count > 0)
+		sal_metrics__xprt_sessions(num_sessions);
 }
 
 /**
@@ -256,6 +266,7 @@ void dissociate_custom_data_from_xprt(SVCXPRT *xprt)
 		glist_del(curr_node);
 		gsh_free(curr_entry);
 	}
+	sal_metrics__xprt_custom_data_status(DISSOCIATED_FROM_XPRT);
 	LogDebug(
 		COMPONENT_XPRT,
 		"Done dissociating custom-data for xprt with FD: %d, socket-addr: %s",
@@ -305,4 +316,5 @@ void destroy_custom_data_for_destroyed_xprt(SVCXPRT *xprt)
 		xprt_handler, destroy_custom_data, TRACE_INFO, xprt,
 		"Destroy custom-data from xprt. socket-addr: {}",
 		TP_STR(sockaddr_str));
+	sal_metrics__xprt_custom_data_status(DESTROYED);
 }

@@ -46,6 +46,7 @@
 #if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
 #include "gsh_lttng/generated_traces/nfs4.h"
 #endif
+#include "sal_metrics.h"
 
 /**
  * @brief Pool for allocating session data
@@ -594,8 +595,10 @@ retry:
 
 	/* Add xprt to the session */
 	nfs41_Session_Add_Connection(session, data->req->rq_xprt);
+	const int num_connections = session->num_conn;
 
 	PTHREAD_RWLOCK_unlock(&session->conn_lock);
+	sal_metrics__session_connections(num_connections);
 	return true;
 }
 
@@ -675,9 +678,10 @@ void nfs41_Session_Remove_Connection(nfs41_session_t *session, SVCXPRT *xprt)
 	/* Remove the xprt from session's connection-xprts */
 	glist_del(&found_xprt->node);
 	gsh_free(found_xprt);
-	session->num_conn--;
+	const int num_connections = --session->num_conn;
 
 	PTHREAD_RWLOCK_unlock(&session->conn_lock);
+	sal_metrics__session_connections(num_connections);
 	LogDebug(COMPONENT_SESSIONS,
 		 "Successfuly removed the connection for xprt addr %s",
 		 xprt_addr);
