@@ -248,6 +248,13 @@ int nfs_libmain(const char *ganesha_conf, const char *lpath,
 
 	nfs_prereq_destroy();
 
+	/* nfs_config_path is allocated only if ganesha_conf is not null. */
+	if (ganesha_conf)
+		gsh_free(nfs_config_path);
+	if (log_path)
+		gsh_free(log_path);
+	gsh_free(nfs_host_name);
+
 	return 0;
 
 fatal_die:
