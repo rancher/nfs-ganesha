@@ -943,6 +943,7 @@ exit 0
 %{_bindir}/ganesha_stats
 %{_bindir}/sm_notify.ganesha
 %{_bindir}/ganesha_mgr
+%{_bindir}/ganesha_logrotate_mgr
 %{_bindir}/ganesha_conf
 %{_bindir}/ganesha-top
 %{_mandir}/*/ganesha_conf.8.gz
