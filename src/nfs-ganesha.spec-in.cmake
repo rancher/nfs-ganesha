@@ -115,7 +115,7 @@ Url:		https://github.com/nfs-ganesha/nfs-ganesha/wiki
 
 Source:		%{sourcename}.tar.gz
 
-BuildRequires:	cmake
+BuildRequires:	cmake3
 BuildRequires:	bison
 BuildRequires:	flex
 BuildRequires:	pkgconfig
@@ -544,7 +544,7 @@ Development headers and auxiliary files for developing with %{name}.
 %setup -q -n %{sourcename}
 
 %build
-cmake .	-DCMAKE_BUILD_TYPE=Debug			\
+cmake3 .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DBUILD_CONFIG=rpmbuild				\
 	-DUSE_FSAL_NULL=%{use_fsal_null}		\
 	-DUSE_FSAL_MEM=%{use_fsal_mem}			\
