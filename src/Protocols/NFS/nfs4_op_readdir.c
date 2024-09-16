@@ -81,7 +81,7 @@ static void restore_data(struct nfs4_readdir_cb_data *tracker)
 
 /* Base response of READDIR res ok includes nfsstat4, and verifier. This is the
  * part of the data that is not serialized with struct dirlist4 */
-#define READDIR_RESOK_BASE_SIZE (sizeof(nfsstat4) + sizeof(verifier4))
+#define READDIR_RESOK_BASE_SIZE (sizeof(verifier4))
 
 /* Base response of dirlist4 It includes entry termination and eof */
 #define DIR_LIST4_BASE_SIZE (2 * BYTES_PER_XDR_UNIT)
@@ -320,9 +320,6 @@ not_junction:
 
 	/* Bits that don't require allocation */
 	if (xdr_getpos(&tracker->xdr) + BASE_ENTRY_SIZE > mem_avail) {
-		if (!tracker->has_entries) {
-			tracker->error = NFS4ERR_TOOSMALL;
-		}
 		LogDebug(COMPONENT_NFS_READDIR,
 			 "Skipping because too small for BASE_ENTRY_SIZE %d",
 			 (int)BASE_ENTRY_SIZE);
@@ -339,9 +336,6 @@ not_junction:
 	if (xdr_getpos(&tracker->xdr) + BASE_ENTRY_SIZE +
 		    RNDUP(name.utf8string_len) >
 	    mem_avail) {
-		if (!tracker->has_entries) {
-			tracker->error = NFS4ERR_TOOSMALL;
-		}
 		LogDebug(COMPONENT_NFS_READDIR,
 			 "Skipping because of name %s too long %d",
 			 (char *)cb_parms->name, (int)name.utf8string_len);
@@ -439,9 +433,9 @@ not_junction:
 skip:
 
 	if (args.rdattr_error != NFS4_OK) {
+		tracker->error = args.rdattr_error;
 		if (!attribute_is_set(tracker->req_attr, FATTR4_RDATTR_ERROR) &&
 		    !attribute_is_set(tracker->req_attr, FATTR4_FS_LOCATIONS)) {
-			tracker->error = args.rdattr_error;
 			LogDebug(
 				COMPONENT_NFS_READDIR,
 				"Skipping because of %s and didn't ask for FATTR4_RDATTR_ERROR or FATTR4_FS_LOCATIONS",
@@ -472,6 +466,9 @@ server_fault:
 	tracker->error = NFS4ERR_SERVERFAULT;
 
 failure:
+
+	if (!tracker->has_entries && tracker->error == NFS4_OK)
+		tracker->error = NFS4ERR_TOOSMALL;
 
 	/* Reset to where we started this entry and encode a boolean
 	 * false instead (entry_follows is false).
@@ -727,8 +724,9 @@ enum nfs_req_result nfs4_op_readdir(struct nfs_argop4 *op,
 	}
 
 	/* Response size is the space we used for the entires + the response
-	 * base size. */
-	data->op_resp_size = xdr_getpos(&tracker.xdr) + READDIR_RESP_BASE_SIZE;
+	 * base size + nfsstat4 size. */
+	data->op_resp_size = xdr_getpos(&tracker.xdr) + READDIR_RESP_BASE_SIZE +
+			     sizeof(nfsstat4);
 
 	if (tracker.has_entries) {
 		struct xdr_uio *uio;
