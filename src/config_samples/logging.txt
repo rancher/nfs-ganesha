@@ -84,6 +84,7 @@ LOG {
 #	  FILE_NAME= true;
 #	  LINE_NUM= true;
 #	  OP_ID=false;
+#	  CLIENT_REQ_XID=false;
 	}
 
 	# Facilities

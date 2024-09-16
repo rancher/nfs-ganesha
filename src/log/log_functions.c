@@ -126,6 +126,7 @@ enum log_flag_index_t {
 	LF_COMPONENT, /*< Log component. */
 	LF_LEVEL, /*< Log level. */
 	LF_OP_ID, /*< Op id. */
+	LF_CLIENT_REQ_XID, /*< Client request XID. */
 };
 
 /**
@@ -163,6 +164,7 @@ struct logfields {
 	bool disp_comp;
 	bool disp_level;
 	bool disp_op_id;
+	bool disp_client_req_xid;
 	enum timedate_formats_t datefmt;
 	enum timedate_formats_t timefmt;
 	char *user_date_fmt;
@@ -1371,6 +1373,13 @@ static int display_log_component(struct display_buffer *dsp_log,
 			b_left = display_printf(dsp_log, "op_id=none :");
 	}
 
+	if (b_left > 0 && logfields->disp_client_req_xid) {
+		if (op_ctx && op_ctx->nfs_reqdata)
+			b_left = display_printf(
+				dsp_log, "xid=%X :",
+				op_ctx->nfs_reqdata->svc.rq_msg.rm_xid);
+	}
+
 	/* If we overflowed the buffer with the header, just skip it. */
 	if (b_left == 0) {
 		display_reset_buffer(dsp_log);
@@ -1866,6 +1875,7 @@ static struct config_item format_options[] = {
 	CONF_ITEM_BOOL("COMPONENT", true, logfields, disp_comp),
 	CONF_ITEM_BOOL("LEVEL", true, logfields, disp_level),
 	CONF_ITEM_BOOL("OP_ID", false, logfields, disp_op_id),
+	CONF_ITEM_BOOL("CLIENT_REQ_XID", false, logfields, disp_client_req_xid),
 	CONFIG_EOL
 };
 

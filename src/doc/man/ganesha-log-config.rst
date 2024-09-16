@@ -170,6 +170,8 @@ time_format(enum,default ganesha)
 
 **OP_ID(bool, default false)**
 
+**CLIENT_REQ_XID(bool, default false)**
+
 See also
 ==============================
 :doc:`ganesha-config <ganesha-config>`\(8)
