@@ -131,8 +131,6 @@ void nfs_rpc_cb_pkginit(void)
 #ifdef _HAVE_GSSAPI
 	gssd_init_cred_cache();
 	PTHREAD_RWLOCK_init(&gss_callback_status.lock, NULL);
-	/* ccache */
-	nfs_rpc_cb_init_ccache(nfs_param.krb5_param.ccache_dir);
 
 	/* sanity check GSSAPI */
 	if (gssd_check_mechs() != 0)
