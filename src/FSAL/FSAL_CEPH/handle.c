@@ -92,10 +92,9 @@ static void ceph_fsal_release(struct fsal_obj_handle *obj_hdl)
 				obj_hdl, fsal_err_txt(st), strerror(st.minor),
 				st.minor);
 		}
-		GSH_AUTO_TRACEPOINT(fsal_ceph, ceph_release, TRACE_DEBUG,
-				    "CEPH release handle. fileid: {}",
-				    obj_hdl->fileid);
 	}
+	GSH_AUTO_TRACEPOINT(fsal_ceph, ceph_release, TRACE_DEBUG,
+			    "CEPH release handle. fileid: {}", obj_hdl->fileid);
 
 	if (obj != export->root)
 		deconstruct_handle(obj);
