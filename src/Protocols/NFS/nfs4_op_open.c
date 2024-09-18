@@ -1033,7 +1033,7 @@ retry_open_file:
 		LogFullDebug(COMPONENT_STATE, "Calling reopen2");
 
 		status = fsal_reopen2(file_obj, *file_state,
-				      openflags | old_openflags, false);
+				      openflags | old_openflags, true);
 
 		if (FSAL_IS_ERROR(status)) {
 			res_OPEN4->status = nfs4_Errno_status(status);
