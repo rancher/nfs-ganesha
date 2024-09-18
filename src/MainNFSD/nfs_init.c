@@ -435,6 +435,7 @@ bool reread_config(void)
 
 	(void)report_config_errors(&err_type, NULL, config_errs_to_log);
 	config_Free(config_struct);
+	LogDebug(COMPONENT_CONFIG, "Config reread successfully");
 	return true;
 }
 

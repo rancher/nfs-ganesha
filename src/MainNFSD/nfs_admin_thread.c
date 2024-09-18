@@ -55,6 +55,7 @@
 #ifdef USE_DBUS
 #include "gsh_dbus.h"
 #include "mdcache.h"
+#include "nfs_lib.h"
 #endif
 #include "conf_url.h"
 #include "nfs_rpc_callback.h"
@@ -583,6 +584,35 @@ static struct gsh_dbus_method method_trim_status = {
 	.args = { STATUS_REPLY, END_ARG_LIST }
 };
 
+/**
+ * @brief Dbus method for getting trim status
+ *
+ * @param[in]  args
+ * @param[out] reply
+ */
+static bool admin_reread_config(DBusMessageIter *args, DBusMessage *reply,
+				DBusError *error)
+{
+	char *errormsg = "OK";
+	DBusMessageIter iter;
+
+	dbus_message_iter_init_append(reply, &iter);
+
+	bool success = reread_config();
+
+	if (!success)
+		errormsg = "Failed to reread config";
+
+	gsh_dbus_status_reply(&iter, success, errormsg);
+	return success;
+}
+
+static struct gsh_dbus_method method_reread_config = {
+	.name = "reread_config",
+	.method = admin_reread_config,
+	.args = { STATUS_REPLY, END_ARG_LIST }
+};
+
 static struct gsh_dbus_method *admin_methods[] = { &method_shutdown,
 						   &method_grace_period,
 						   &method_get_grace,
@@ -596,6 +626,7 @@ static struct gsh_dbus_method *admin_methods[] = { &method_shutdown,
 						   &method_trim_disable,
 						   &method_trim_call,
 						   &method_trim_status,
+						   &method_reread_config,
 						   NULL };
 
 #define HANDLE_VERSION_PROP(prop_name, prop_string)                           \
