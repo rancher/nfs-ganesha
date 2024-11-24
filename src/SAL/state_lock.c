@@ -3214,7 +3214,7 @@ state_status_t state_cancel_blocked(state_lock_entry_t *lock_entry)
 
 		default:
 			LogFatal(COMPONENT_STATE, "Got an protocol type %s",
-				 str_protocol(lock_entry->sle_blocked));
+				 str_protocol(lock_entry->sle_protocol));
 		}
 		break;
 
