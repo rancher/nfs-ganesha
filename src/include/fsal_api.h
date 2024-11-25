@@ -3005,6 +3005,7 @@ struct fsal_module {
 	void *dl_handle; /*< Handle to the dlopen()d shared
 				   library. NULL if statically linked */
 	struct fsal_ops m_ops; /*< FSAL module methods vector */
+	bool is_configured; /* was fsal configured*/
 
 	pthread_rwlock_t fsm_lock; /*< Lock to be held when
 					    manipulating its lists (above). */

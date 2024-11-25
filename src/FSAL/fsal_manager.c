@@ -514,6 +514,7 @@ int register_fsal(struct fsal_module *fsal_hdl, const char *name,
 	glist_init(&fsal_hdl->servers);
 	glist_init(&fsal_hdl->handles);
 	glist_init(&fsal_hdl->exports);
+	fsal_hdl->is_configured = false;
 	glist_add_tail(&fsal_list, &fsal_hdl->fsals);
 	if (load_state == loading)
 		load_state = registered;
@@ -641,6 +642,7 @@ int fsal_load_init(void *node, const char *name, struct fsal_module **fsal_hdl,
 		myconfig = get_parse_root(node);
 		status = (*fsal_hdl)->m_ops.init_config(*fsal_hdl, myconfig,
 							err_type);
+		(*fsal_hdl)->is_configured = true;
 		if (FSAL_IS_ERROR(status)) {
 			config_proc_error(node, err_type,
 					  "Failed to initialize FSAL (%s)",
@@ -657,8 +659,16 @@ int fsal_load_init(void *node, const char *name, struct fsal_module **fsal_hdl,
 		config_file_t myconfig;
 
 		myconfig = get_parse_root(node);
-		status = (*fsal_hdl)->m_ops.update_config(*fsal_hdl, myconfig,
-							  err_type);
+		if ((*fsal_hdl)->is_configured) {
+			status = (*fsal_hdl)->m_ops.update_config(
+				*fsal_hdl, myconfig, err_type);
+		} else {
+			/* Static fsals might not be configured */
+			(*fsal_hdl)->is_configured = true;
+			status = (*fsal_hdl)->m_ops.init_config(
+				*fsal_hdl, myconfig, err_type);
+		}
+
 		if (FSAL_IS_ERROR(status)) {
 			config_proc_error(node, err_type,
 					  "Failed to update FSAL (%s)", name);
