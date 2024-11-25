@@ -41,6 +41,11 @@
 #include "nfs4.h"
 #include "sal_functions.h"
 
+#include "gsh_lttng/gsh_lttng.h"
+#if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
+#include "gsh_lttng/generated_traces/nfs4.h"
+#endif
+
 /**
  * @brief Return the lifetime of a valid lease
  *
@@ -103,6 +108,9 @@ bool valid_lease(nfs_client_id_t *clientid, bool is_from_reaper)
 			     "Check Lease %s (Valid=%s %u seconds left)", str,
 			     valid ? "YES" : "NO", valid);
 	}
+
+	GSH_CLIENT_ID_AUTO_TRACEPOINT(nfs4, lease, TRACE_INFO, clientid,
+				      "{} seconds left on lease", valid);
 
 	return valid != 0;
 }

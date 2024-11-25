@@ -43,6 +43,7 @@ typedef struct nfs41_session_list_entry {
 typedef struct nfs41_sessions_holder {
 	pthread_rwlock_t sessions_lock;
 	struct glist_head sessions;
+	uint8_t num_sessions;
 } nfs41_sessions_holder_t;
 
 typedef enum xprt_custom_data_status {

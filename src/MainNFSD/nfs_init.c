@@ -833,6 +833,7 @@ int init_server_pkgs(void)
 	LogEvent(COMPONENT_INIT, "ID Mapper successfully initialized.");
 
 	connection_manager__init();
+	LogEvent(COMPONENT_INIT, "Connection Manager initialized.");
 	return 0;
 }
 
@@ -1007,6 +1008,7 @@ static void nfs_Init(const nfs_start_info_t *p_start_info)
 #endif
 
 #ifdef USE_MONITORING
+	/* initializing nfs ganesha metrics */
 	nfs_metrics__init();
 #endif
 

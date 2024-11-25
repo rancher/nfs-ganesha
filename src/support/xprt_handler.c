@@ -32,6 +32,11 @@
 #include "nfs_core.h"
 #include "sal_functions.h"
 
+#include "gsh_xprt_tracepoint.h"
+#if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
+#include "gsh_lttng/generated_traces/xprt_handler.h"
+#endif
+
 /**
  * @brief Inits the xprt's user-data represented by the `xprt_custom_data_t`
  * struct.
@@ -51,6 +56,7 @@ void init_custom_data_for_xprt(SVCXPRT *xprt)
 	glist_init(&xprt_data->nfs41_sessions_holder.sessions);
 	PTHREAD_RWLOCK_init(&xprt_data->nfs41_sessions_holder.sessions_lock,
 			    NULL);
+	xprt_data->nfs41_sessions_holder.num_sessions = 0;
 	xprt->xp_u1 = (void *)xprt_data;
 	xprt_data->status = ASSOCIATED_TO_XPRT;
 
@@ -58,6 +64,10 @@ void init_custom_data_for_xprt(SVCXPRT *xprt)
 	LogDebug(COMPONENT_XPRT,
 		 "xp_u1 initialised for xprt with FD: %d and socket-addr: %s",
 		 xprt->xp_fd, sockaddr_str);
+	GSH_XPRT_AUTO_TRACEPOINT(xprt_handler, init_custom_data, TRACE_INFO,
+				 xprt,
+				 "Initialised custom-data, socket-addr: {}",
+				 TP_STR(sockaddr_str));
 }
 
 /**
@@ -89,6 +99,10 @@ bool add_nfs41_session_to_xprt(SVCXPRT *xprt, nfs41_session_t *session)
 		LogWarn(COMPONENT_SESSIONS,
 			"Do not associate xprt-data under dissociation with xprt FD: %d to the session",
 			xprt->xp_fd);
+		GSH_XPRT_AUTO_TRACEPOINT(
+			xprt_handler, do_not_add_nfs41_session, TRACE_WARNING,
+			xprt, "Do not associate xprt to the session: {}",
+			TP_SESSION(session->session_id));
 		dec_session_ref(session);
 		gsh_free(new_entry);
 		return false;
@@ -97,6 +111,10 @@ bool add_nfs41_session_to_xprt(SVCXPRT *xprt, nfs41_session_t *session)
 	glist_add_tail(&xprt_data->nfs41_sessions_holder.sessions,
 		       &new_entry->node);
 	PTHREAD_RWLOCK_unlock(&xprt_data->nfs41_sessions_holder.sessions_lock);
+
+	GSH_XPRT_AUTO_TRACEPOINT(xprt_handler, add_nfs41_session, TRACE_INFO,
+				 xprt, "Added nfs41 session: {}",
+				 TP_SESSION(session->session_id));
 	return true;
 }
 
@@ -108,6 +126,7 @@ void remove_nfs41_session_from_xprt(SVCXPRT *xprt, nfs41_session_t *session)
 	struct glist_head *curr_node, *next_node;
 	xprt_custom_data_t *xprt_data;
 	nfs41_sessions_holder_t *sessions_holder;
+	uint8_t found_session_count = 0;
 
 	assert(xprt->xp_u1 != NULL);
 	xprt_data = (xprt_custom_data_t *)xprt->xp_u1;
@@ -124,8 +143,14 @@ void remove_nfs41_session_from_xprt(SVCXPRT *xprt, nfs41_session_t *session)
 			dec_session_ref(curr_entry->session);
 			glist_del(curr_node);
 			gsh_free(curr_entry);
+			GSH_XPRT_AUTO_TRACEPOINT(
+				xprt_handler, remove_nfs41_session, TRACE_INFO,
+				xprt, "Removed session {} from xprt",
+				TP_SESSION(session->session_id));
+			found_session_count++;
 		}
 	}
+	sessions_holder->num_sessions -= found_session_count;
 	PTHREAD_RWLOCK_unlock(&sessions_holder->sessions_lock);
 }
 
@@ -158,6 +183,10 @@ void dissociate_custom_data_from_xprt(SVCXPRT *xprt)
 		COMPONENT_XPRT,
 		"About to un-reference custom-data from xprt with FD: %d, socket-addr: %s",
 		xprt->xp_fd, xprt_addr_str);
+	GSH_XPRT_AUTO_TRACEPOINT(
+		xprt_handler, dissociate_custom_data, TRACE_INFO, xprt,
+		"Dissociate custom-data from xprt. socket-addr: {}",
+		TP_STR(xprt_addr_str));
 
 	xprt_data = (xprt_custom_data_t *)xprt->xp_u1;
 	assert(xprt_data->status == ASSOCIATED_TO_XPRT);
@@ -203,6 +232,7 @@ void dissociate_custom_data_from_xprt(SVCXPRT *xprt)
 	PTHREAD_RWLOCK_wrlock(&sessions_holder->sessions_lock);
 	/* Move all xprt-data sessions to the duplicate-sessions list */
 	glist_splice_tail(&duplicate_sessions, &sessions_holder->sessions);
+	sessions_holder->num_sessions = 0;
 	xprt_data->status = DISSOCIATED_FROM_XPRT;
 	PTHREAD_RWLOCK_unlock(&sessions_holder->sessions_lock);
 
@@ -226,9 +256,14 @@ void dissociate_custom_data_from_xprt(SVCXPRT *xprt)
 		glist_del(curr_node);
 		gsh_free(curr_entry);
 	}
-	LogDebug(COMPONENT_XPRT,
-		 "Done un-referencing of xprt with FD: %d, socket-addr: %s",
-		 xprt->xp_fd, xprt_addr_str);
+	LogDebug(
+		COMPONENT_XPRT,
+		"Done dissociating custom-data for xprt with FD: %d, socket-addr: %s",
+		xprt->xp_fd, xprt_addr_str);
+	GSH_XPRT_AUTO_TRACEPOINT(
+		xprt_handler, done_dissociate_custom_data, TRACE_INFO, xprt,
+		"Done dissociating custom-data from xprt. socket-addr: {}",
+		TP_STR(xprt_addr_str));
 }
 
 /**
@@ -266,4 +301,8 @@ void destroy_custom_data_for_destroyed_xprt(SVCXPRT *xprt)
 	xprt_data->status = DESTROYED;
 	gsh_free(xprt_data);
 	xprt->xp_u1 = NULL;
+	GSH_XPRT_AUTO_TRACEPOINT(
+		xprt_handler, destroy_custom_data, TRACE_INFO, xprt,
+		"Destroy custom-data from xprt. socket-addr: {}",
+		TP_STR(sockaddr_str));
 }

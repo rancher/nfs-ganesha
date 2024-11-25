@@ -34,27 +34,56 @@
 #include "gsh_config.h"
 #include "xprt_handler.h"
 
+#include "gsh_lttng/gsh_lttng.h"
+#if defined(USE_LTTNG) && !defined(LTTNG_PARSING)
+#include "gsh_lttng/generated_traces/connection_manager.h"
+#endif
+
 #define LogDebugClient(client, format, args...) \
 	LogDebug(COMPONENT_XPRT, "%s: " format, \
 		 get_client_address_for_debugging(client), ##args)
+#define LogInfoClient(client, format, args...) \
+	LogInfo(COMPONENT_XPRT, "%s: " format, \
+		get_client_address_for_debugging(client), ##args)
 #define LogWarnClient(client, format, args...) \
 	LogWarn(COMPONENT_XPRT, "%s: " format, \
 		get_client_address_for_debugging(client), ##args)
-#define LogFatalClient(client, format, args...)                             \
-	do {                                                                \
-		LogFatal(COMPONENT_XPRT, "%s: " format,                     \
-			 get_client_address_for_debugging(client), ##args); \
-		abort();                                                    \
-	} while (0)
+#define LogFatalClient(client, format, args...) \
+	LogFatal(COMPONENT_XPRT, "%s: " format, \
+		 get_client_address_for_debugging(client), ##args)
 #define LogDebugConnection(connection, format, args...)               \
 	LogDebugClient(&(connection)->gsh_client->connection_manager, \
 		       "fd %d: " format, (connection)->xprt->xp_fd, ##args)
+#define LogInfoConnection(connection, format, args...)               \
+	LogInfoClient(&(connection)->gsh_client->connection_manager, \
+		      "fd %d: " format, (connection)->xprt->xp_fd, ##args)
 #define LogWarnConnection(connection, format, args...)               \
 	LogWarnClient(&(connection)->gsh_client->connection_manager, \
 		      "fd %d: " format, (connection)->xprt->xp_fd, ##args)
 #define LogFatalConnection(connection, format, args...)               \
 	LogFatalClient(&(connection)->gsh_client->connection_manager, \
 		       "fd %d: " format, (connection)->xprt->xp_fd, ##args)
+
+#define PROV_NAME connection_manager
+#define CLIENT_FORMAT "{}"
+#define CLIENT_VARS(client, addr) TP_STR(addr)
+
+#define CLIENT_AUTO_TRACEPOINT(client, event, log_level, format, ...)          \
+	do {                                                                   \
+		const char *const addr =                                       \
+			get_client_address_for_debugging(client);              \
+		GSH_AUTO_TRACEPOINT(PROV_NAME, event, log_level,               \
+				    CLIENT_FORMAT ": " format,                 \
+				    CLIENT_VARS(client, addr), ##__VA_ARGS__); \
+	} while (0)
+
+#define CONN_FORMAT "fd {}"
+#define CONN_VARS(connection) (connection)->xprt->xp_fd
+
+#define CONN_AUTO_TRACEPOINT(connection, event, log_level, format, ...)       \
+	CLIENT_AUTO_TRACEPOINT(&(connection)->gsh_client->connection_manager, \
+			       event, log_level, CONN_FORMAT ": " format,     \
+			       CONN_VARS(connection), ##__VA_ARGS__)
 
 static inline const char *
 get_client_address_for_debugging(const connection_manager__client_t *client)
@@ -105,6 +134,9 @@ change_state(connection_manager__client_t *client,
 {
 	LogDebugClient(client, "Changing state: %d -> %d", client->state,
 		       new_state);
+	CLIENT_AUTO_TRACEPOINT(client, change_state, TRACE_INFO,
+			       "Changing state: {} -> {}", client->state,
+			       new_state);
 	assert(is_transition_valid(client->state, new_state));
 	connection_manager_metrics__client_state_inc(new_state);
 	connection_manager_metrics__client_state_dec(client->state);
@@ -136,6 +168,8 @@ condition_timedwait(connection_manager__client_t *client,
 	case ETIMEDOUT:
 		return CONDITION_WAIT__TIMEOUT;
 	default:
+		CLIENT_AUTO_TRACEPOINT(client, cond_time, TRACE_CRIT,
+				       "Unexpected return code: {}", rc);
 		LogFatalClient(client, "Unexpected return code: %d", rc);
 	}
 }
@@ -147,6 +181,9 @@ static inline void wait_for_state_change(connection_manager__client_t *client)
 		client->state;
 	LogDebugClient(client, "Waiting until state changes from %d",
 		       initial_state);
+	CLIENT_AUTO_TRACEPOINT(client, wait_state_change, TRACE_INFO,
+			       "Waiting until state changes from {}",
+			       initial_state);
 	while (client->state == initial_state)
 		condition_wait(client);
 }
@@ -158,15 +195,22 @@ static enum connection_manager__drain_t callback_default_drain_other_servers(
 	LogWarn(COMPONENT_XPRT,
 		"%s: Client connected before Connection Manager callback was registered",
 		client_address_str);
+	GSH_AUTO_TRACEPOINT(PROV_NAME, default_drain, TRACE_WARNING,
+			    "{}: Connection is not managed",
+			    TP_STR(client_address_str));
 	return CONNECTION_MANAGER__DRAIN__FAILED;
 }
 
+#define DEFAULT_CALLBACK_CONTEXT                     \
+	{ /*user_context=*/                          \
+	  NULL, callback_default_drain_other_servers \
+	}
+
 static pthread_rwlock_t callback_lock = RWLOCK_INITIALIZER;
-static const connection_manager__callback_context_t callback_default = {
-	/*user_context=*/NULL, callback_default_drain_other_servers
-};
+static const connection_manager__callback_context_t callback_default =
+	DEFAULT_CALLBACK_CONTEXT;
 static connection_manager__callback_context_t callback_context =
-	callback_default;
+	DEFAULT_CALLBACK_CONTEXT;
 
 void connection_manager__callback_set(connection_manager__callback_context_t new)
 {
@@ -183,7 +227,6 @@ connection_manager__callback_context_t connection_manager__callback_clear(void)
 	assert(callback_context.drain_and_disconnect_other_servers !=
 	       callback_default.drain_and_disconnect_other_servers);
 	const connection_manager__callback_context_t old = callback_context;
-
 	callback_context = callback_default;
 	PTHREAD_RWLOCK_unlock(&callback_lock);
 	return old;
@@ -192,6 +235,8 @@ connection_manager__callback_context_t connection_manager__callback_clear(void)
 void connection_manager__client_init(connection_manager__client_t *client)
 {
 	LogDebugClient(client, "Client init %p", client);
+	CLIENT_AUTO_TRACEPOINT(client, client_init, TRACE_INFO,
+			       "Client init {}", client);
 	client->state = CONNECTION_MANAGER__CLIENT_STATE__DRAINED;
 	PTHREAD_MUTEX_init(&client->mutex, NULL);
 	PTHREAD_COND_init(&client->cond_change, NULL);
@@ -203,6 +248,8 @@ void connection_manager__client_init(connection_manager__client_t *client)
 void connection_manager__client_fini(connection_manager__client_t *client)
 {
 	LogDebugClient(client, "Client fini %p", client);
+	CLIENT_AUTO_TRACEPOINT(client, client_fini, TRACE_INFO,
+			       "Client fini {}", client);
 	assert(client->connections_count == 0);
 	assert(glist_empty(&client->connections));
 	assert(client->state == CONNECTION_MANAGER__CLIENT_STATE__DRAINED);
@@ -224,9 +271,13 @@ update_socket_linger(const connection_manager__connection_t *connection)
 
 	if (setsockopt(connection->xprt->xp_fd, SOL_SOCKET, SO_LINGER, &linger,
 		       sizeof(linger)) < 0) {
+		const char *const strerr = strerror(errno);
 		LogWarnConnection(connection,
 				  "Could not set linger for connection: %s",
-				  strerror(errno));
+				  strerr);
+		CONN_AUTO_TRACEPOINT(connection, socket_linger, TRACE_WARNING,
+				     "Could not set linger for connection: {}",
+				     TP_STR(strerr));
 	}
 }
 
@@ -249,6 +300,10 @@ try_drain_self(connection_manager__client_t *client, uint32_t timeout_sec)
 		LogDebugConnection(connection,
 				   "Destroying connection (xp_refcnt %d)",
 				   connection->xprt->xp_refcnt);
+		CONN_AUTO_TRACEPOINT(connection, try_drain_self_entry,
+				     TRACE_INFO,
+				     "Destroying connection (xp_refcnt {})",
+				     connection->xprt->xp_refcnt);
 		assert(connection->is_managed);
 		if (connection->is_destroyed)
 			continue;
@@ -260,6 +315,10 @@ try_drain_self(connection_manager__client_t *client, uint32_t timeout_sec)
 	LogDebugClient(client,
 		       "Waiting for %d connections to terminate, timeout=%d",
 		       client->connections_count, timeout_sec);
+	CLIENT_AUTO_TRACEPOINT(
+		client, try_drain_self_wait, TRACE_INFO,
+		"Waiting for {} connections to terminate, timeout={}",
+		client->connections_count, timeout_sec);
 	const struct timespec timeout = timeout_seconds(timeout_sec);
 	enum condition_wait_t wait_result = CONDITION_WAIT__OK;
 
@@ -276,6 +335,10 @@ try_drain_self(connection_manager__client_t *client, uint32_t timeout_sec)
 	LogDebugClient(client,
 		       "Finished waiting: state=%d connections=%d wait=%d",
 		       client->state, client->connections_count, wait_result);
+	CLIENT_AUTO_TRACEPOINT(
+		client, try_drain_self_finish_wait, TRACE_INFO,
+		"Finished waiting: state={} connections={} wait={}",
+		client->state, client->connections_count, wait_result);
 
 	if (client->state == CONNECTION_MANAGER__CLIENT_STATE__DRAINING) {
 		/* Since we have (mutex && DRAINING), we're allowed to change
@@ -302,11 +365,16 @@ try_drain_self(connection_manager__client_t *client, uint32_t timeout_sec)
 			glist_entry(node, connection_manager__connection_t,
 				    node);
 		const int delta = time(NULL) - connection->destroy_start;
-
-		if (delta >
-		    nfs_param.core_param.connection_manager_timeout_sec *
-			    CONNECTION_MANAGER__DRAIN_MAX_EXPECTED_ITERATIONS) {
+		const int max_delta =
+			nfs_param.core_param.connection_manager_timeout_sec *
+			CONNECTION_MANAGER__DRAIN_MAX_EXPECTED_ITERATIONS;
+		/* Must check for "is_destroyed", because this might be a new
+		   connection that aborted the drain. */
+		if (connection->is_destroyed && delta > max_delta) {
 			LogWarnConnection(connection, "Stuck for %d", delta);
+			CONN_AUTO_TRACEPOINT(connection, try_drain_self_stuck,
+					     TRACE_WARNING, "Stuck for {}",
+					     delta);
 			return CONNECTION_MANAGER__DRAIN__FAILED_STUCK;
 		}
 	}
@@ -336,6 +404,10 @@ connection_manager__drain_and_disconnect_local(sockaddr_t *client_address)
 
 			LogDebug(COMPONENT_XPRT, "Client not found: %s",
 				 ok ? address_for_debugging : "<unknown>");
+			GSH_AUTO_TRACEPOINT(PROV_NAME, disco_local_no_client,
+					    TRACE_INFO, "Client not found: {}",
+					    TP_STR(ok ? address_for_debugging :
+							"<unknown>"));
 		}
 		result = CONNECTION_MANAGER__DRAIN__SUCCESS_NO_CONNECTIONS;
 		goto out;
@@ -347,16 +419,23 @@ connection_manager__drain_and_disconnect_local(sockaddr_t *client_address)
 	switch (client->state) {
 	case CONNECTION_MANAGER__CLIENT_STATE__DRAINED: {
 		LogDebugClient(client, "Already drained");
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_drained, TRACE_INFO,
+				       "Already drained");
 		result = CONNECTION_MANAGER__DRAIN__SUCCESS_NO_CONNECTIONS;
 		break;
 	}
 	case CONNECTION_MANAGER__CLIENT_STATE__ACTIVATING: {
 		LogDebugClient(client, "Busy draining other servers");
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_activating,
+				       TRACE_INFO,
+				       "Busy draining other servers");
 		result = CONNECTION_MANAGER__DRAIN__FAILED;
 		break;
 	}
 	case CONNECTION_MANAGER__CLIENT_STATE__ACTIVE: {
 		LogDebugClient(client, "Starting self drain");
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_active, TRACE_INFO,
+				       "Starting self drain");
 		result = try_drain_self(
 			client,
 			nfs_param.core_param.connection_manager_timeout_sec);
@@ -364,6 +443,8 @@ connection_manager__drain_and_disconnect_local(sockaddr_t *client_address)
 	}
 	case CONNECTION_MANAGER__CLIENT_STATE__DRAINING: {
 		LogDebugClient(client, "Already self draining, waiting");
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_draining, TRACE_INFO,
+				       "Already self draining, waiting");
 		wait_for_state_change(client);
 		result = (client->state ==
 			  CONNECTION_MANAGER__CLIENT_STATE__DRAINED) ?
@@ -372,6 +453,10 @@ connection_manager__drain_and_disconnect_local(sockaddr_t *client_address)
 		break;
 	}
 	default: {
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_state_unknown,
+				       TRACE_CRIT,
+				       "Unexpected connection manager state {}",
+				       client->state);
 		LogFatalClient(client, "Unexpected connection manager state %d",
 			       client->state);
 	}
@@ -385,13 +470,23 @@ connection_manager__drain_and_disconnect_local(sockaddr_t *client_address)
 		/* Fallthrough */
 	case CONNECTION_MANAGER__DRAIN__SUCCESS_NO_CONNECTIONS:
 		LogDebugClient(client, "Drain was successful: %d", result);
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_no_connections,
+				       TRACE_INFO, "Drain was successful: {}",
+				       result);
 		break;
 	case CONNECTION_MANAGER__DRAIN__FAILED:
 		/* Fallthrough */
 	case CONNECTION_MANAGER__DRAIN__FAILED_TIMEOUT:
+		/* Fallthrough */
+	case CONNECTION_MANAGER__DRAIN__FAILED_STUCK:
 		LogWarnClient(client, "Drain failed: %d", result);
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_failed_stuc,
+				       TRACE_INFO, "Drain failed: {}", result);
 		break;
 	default:
+		CLIENT_AUTO_TRACEPOINT(client, disco_local_result_unknown,
+				       TRACE_CRIT, "Unknown result: {}",
+				       result);
 		LogFatalClient(client, "Unknown result: %d", result);
 	}
 
@@ -405,8 +500,11 @@ static inline connection_manager__connection_t *
 xprt_to_connection(const SVCXPRT *xprt)
 {
 	if (xprt->xp_u1 == NULL) {
-		LogDebug(COMPONENT_XPRT, "fd %d: No custom data allocated",
-			 xprt->xp_fd);
+		LogInfo(COMPONENT_XPRT, "fd %d: No custom data allocated",
+			xprt->xp_fd);
+		GSH_AUTO_TRACEPOINT(PROV_NAME, xprt_to_conn, TRACE_INFO,
+				    "fd {}: No custom data allocated",
+				    xprt->xp_fd);
 		return NULL;
 	}
 	xprt_custom_data_t *const xprt_data = (xprt_custom_data_t *)xprt->xp_u1;
@@ -441,6 +539,9 @@ try_activate_client_if_needed(connection_manager__connection_t *connection)
 	switch (client->state) {
 	case CONNECTION_MANAGER__CLIENT_STATE__DRAINED: {
 		LogDebugConnection(connection, "Client is drained, activating");
+		CONN_AUTO_TRACEPOINT(connection, activate_clinet__drained,
+				     TRACE_INFO,
+				     "Client is drained, activating");
 		change_state(client,
 			     CONNECTION_MANAGER__CLIENT_STATE__ACTIVATING);
 		/* It's OK to unlock because no other thread can change the
@@ -448,6 +549,8 @@ try_activate_client_if_needed(connection_manager__connection_t *connection)
 		PTHREAD_MUTEX_unlock(&client->mutex);
 
 		LogDebugConnection(connection, "Draining other servers");
+		CONN_AUTO_TRACEPOINT(connection, activate_clinet__drain_others,
+				     TRACE_INFO, "Draining other servers");
 		const struct timespec timeout = timeout_seconds(
 			nfs_param.core_param.connection_manager_timeout_sec);
 		PTHREAD_RWLOCK_rdlock(&callback_lock);
@@ -476,19 +579,30 @@ try_activate_client_if_needed(connection_manager__connection_t *connection)
 		LogDebugConnection(
 			connection,
 			"Client is activating in another thread, waiting");
+		CONN_AUTO_TRACEPOINT(
+			connection, activate_clinet__activating, TRACE_INFO,
+			"Client is activating in another thread, waiting");
 		wait_for_state_change(client);
 		break;
 	}
 	case CONNECTION_MANAGER__CLIENT_STATE__ACTIVE: {
 		LogDebugConnection(connection, "Client is already active");
+		CONN_AUTO_TRACEPOINT(connection, activate_clinet__active,
+				     TRACE_INFO, "Client is already active");
 		break;
 	}
 	case CONNECTION_MANAGER__CLIENT_STATE__DRAINING: {
 		LogDebugConnection(connection, "Canceling ongoing drain");
+		CONN_AUTO_TRACEPOINT(connection, activate_clinet__draining,
+				     TRACE_INFO, "Canceling ongoing drain");
 		change_state(client, CONNECTION_MANAGER__CLIENT_STATE__ACTIVE);
 		break;
 	}
 	default: {
+		CONN_AUTO_TRACEPOINT(connection, activate_clinet__state_unknown,
+				     TRACE_CRIT,
+				     "Unexpected connection manager state {}",
+				     client->state);
 		LogFatalConnection(connection,
 				   "Unexpected connection manager state %d",
 				   client->state);
@@ -500,9 +614,16 @@ void connection_manager__connection_init(SVCXPRT *xprt)
 {
 	LogInfo(COMPONENT_XPRT, "fd %d: Connection init for xprt %p",
 		xprt->xp_fd, xprt);
+	GSH_AUTO_TRACEPOINT(PROV_NAME, conn_init, TRACE_INFO,
+			    "fd {}: Connection init for xprt {}", xprt->xp_fd,
+			    xprt);
 	connection_manager__connection_t *const connection =
 		xprt_to_connection(xprt);
 	if (!connection) {
+		GSH_AUTO_TRACEPOINT(
+			PROV_NAME, conn_init_no_conn, TRACE_CRIT,
+			"fd {}: Must call nfs_rpc_alloc_user_data before calling {}",
+			xprt->xp_fd, __func__);
 		LogFatal(
 			COMPONENT_XPRT,
 			"fd %d: Must call nfs_rpc_alloc_user_data before calling %s",
@@ -512,6 +633,8 @@ void connection_manager__connection_init(SVCXPRT *xprt)
 	 * stored in the XPRT custom user data. When the XPRT is destroyed it
 	 * calls connection_manager__connection_finished  */
 	connection->xprt = xprt;
+	connection->is_destroyed = false;
+	connection->destroy_start = 0;
 
 	connection->is_managed = false;
 	/* connection_init is called when the connection is just established.
@@ -538,10 +661,16 @@ connection_manager__connection_started(SVCXPRT *xprt)
 	connection_manager__client_t *const client =
 		&gsh_client->connection_manager;
 	LogDebugClient(client, "fd %d: Connection started", xprt->xp_fd);
+	CLIENT_AUTO_TRACEPOINT(client, conn_started, TRACE_INFO,
+			       "fd {}: Connection started", xprt->xp_fd);
 
 	connection_manager__connection_t *const connection =
 		xprt_to_connection(xprt);
 	if (!connection) {
+		CLIENT_AUTO_TRACEPOINT(
+			client, conn_started_no_conn, TRACE_CRIT,
+			"fd {}: Must call nfs_rpc_alloc_user_data before calling {}",
+			xprt->xp_fd, TP_STR(__func__));
 		LogFatalClient(
 			client,
 			"fd %d: Must call nfs_rpc_alloc_user_data before calling %s",
@@ -551,9 +680,13 @@ connection_manager__connection_started(SVCXPRT *xprt)
 	/* assert that connecton_init function was called before.
 	 * The init function should have set the xprt in the connection. */
 	if (connection->xprt != xprt) {
+		CLIENT_AUTO_TRACEPOINT(
+			client, conn_started_xprt, TRACE_CRIT,
+			"found connection xprt {} is different from given xprt {}",
+			connection->xprt, xprt);
 		LogFatalClient(
 			client,
-			"found connection xprt %p is differnet from given xprt %p ",
+			"found connection xprt %p is different from given xprt %p ",
 			connection->xprt, xprt);
 	}
 
@@ -569,6 +702,9 @@ connection_manager__connection_started(SVCXPRT *xprt)
 		LogDebugConnection(
 			connection,
 			"Connection is not managed by connection manager");
+		CONN_AUTO_TRACEPOINT(
+			connection, conn_started_not_mananged, TRACE_INFO,
+			"Connection is not managed by connection manager");
 		connection->gsh_client = NULL;
 		put_gsh_client(gsh_client);
 		result = CONNECTION_MANAGER__CONNECTION_STARTED__ALLOW;
@@ -581,6 +717,9 @@ connection_manager__connection_started(SVCXPRT *xprt)
 	if (client->state != CONNECTION_MANAGER__CLIENT_STATE__ACTIVE) {
 		LogWarnConnection(connection, "Failed with state %d",
 				  client->state);
+		CONN_AUTO_TRACEPOINT(connection, conn_started_not_active,
+				     TRACE_WARNING, "Failed with state {}",
+				     client->state);
 		connection->is_managed = false;
 		PTHREAD_MUTEX_unlock(&client->mutex);
 		connection->gsh_client = NULL;
@@ -591,6 +730,8 @@ connection_manager__connection_started(SVCXPRT *xprt)
 
 	LogDebugConnection(connection, "Success (xp_refcnt %d)",
 			   xprt->xp_refcnt);
+	CONN_AUTO_TRACEPOINT(connection, conn_started_done, TRACE_INFO,
+			     "Success (xp_refcnt {})", xprt->xp_refcnt);
 	glist_add_tail(&client->connections, &connection->node);
 	client->connections_count++;
 	PTHREAD_MUTEX_unlock(&client->mutex);
@@ -607,14 +748,19 @@ void connection_manager__connection_finished(const SVCXPRT *xprt)
 	connection_manager__connection_t *const connection =
 		xprt_to_connection(xprt);
 	if (!connection || !connection->is_managed) {
-		LogDebug(COMPONENT_XPRT, "fd %d: Connection is not managed",
-			 xprt->xp_fd);
+		LogInfo(COMPONENT_XPRT, "fd %d: Connection is not managed",
+			xprt->xp_fd);
+		GSH_AUTO_TRACEPOINT(PROV_NAME, conn_fini_no_conn, TRACE_INFO,
+				    "fd {}: Connection is not managed",
+				    xprt->xp_fd);
 		return;
 	}
 	struct gsh_client *const gsh_client = connection->gsh_client;
 	connection_manager__client_t *const client =
 		&gsh_client->connection_manager;
 	LogDebugConnection(connection, "Connection finished");
+	CONN_AUTO_TRACEPOINT(connection, conn_finished, TRACE_INFO,
+			     "Connection finished");
 
 	PTHREAD_MUTEX_lock(&client->mutex);
 	glist_del(&connection->node);
