@@ -44,6 +44,7 @@
 #include <sys/resource.h>
 #include <execinfo.h>
 #include <assert.h>
+#include <dlfcn.h>
 
 #ifdef USE_UNWIND
 #define UNW_LOCAL_ONLY

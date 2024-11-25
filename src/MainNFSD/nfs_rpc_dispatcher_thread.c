@@ -78,6 +78,7 @@
 #endif
 
 #ifdef USE_MONITORING
+#include "monitoring.h"
 #include "nfs_metrics.h"
 #endif /* USE_MONITORING */
 

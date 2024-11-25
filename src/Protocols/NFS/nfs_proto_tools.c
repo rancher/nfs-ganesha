@@ -4339,13 +4339,14 @@ static int Fattr4_To_FSAL_attr(struct fsal_attrlist *attrs, fattr4 *Fattr,
 	     attribute_to_set != -1;
 	     attribute_to_set = next_attr_from_bitmap(&Fattr->attrmask,
 						      attribute_to_set)) {
-		const struct fattr4_dent *f4e = fattr4tab + attribute_to_set;
+		const struct fattr4_dent *f4e;
 
 		if (attribute_to_set > FATTR4_MAX_ATTR_INDEX) {
 			/* Undefined attribute */
 			nfs_status = NFS4ERR_ATTRNOTSUPP;
 			goto decodeerr;
 		}
+		f4e = fattr4tab + attribute_to_set;
 		xdr_res = f4e->decode(&attr_body, &args);
 
 		if (xdr_res == FATTR_XDR_SUCCESS) {
@@ -4413,14 +4414,14 @@ int bitmap4_to_attrmask_t(bitmap4 *bitmap4, attrmask_t *mask)
 	     attribute_to_set != -1;
 	     attribute_to_set =
 		     next_attr_from_bitmap(bitmap4, attribute_to_set)) {
-		const struct fattr4_dent *f4e = fattr4tab + attribute_to_set;
+		const struct fattr4_dent *f4e;
 
 		if (attribute_to_set > FATTR4_MAX_ATTR_INDEX) {
 			/* Undefined attrbute */
 			nfs_status = NFS4ERR_ATTRNOTSUPP;
 			break;
 		}
-
+		f4e = fattr4tab + attribute_to_set;
 		*mask |= f4e->attrmask;
 
 		LogFullDebug(COMPONENT_NFS_V4, "Request attr %d, name = %s",

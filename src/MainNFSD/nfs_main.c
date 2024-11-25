@@ -38,6 +38,7 @@
 #include <pthread.h>
 #include <signal.h> /* for sigaction */
 #include <errno.h>
+#include <dlfcn.h>
 #include "fsal.h"
 #include "log.h"
 #include "gsh_rpc.h"
