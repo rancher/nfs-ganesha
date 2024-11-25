@@ -318,6 +318,7 @@ void nfs_metrics__rpcs_in_flight(int64_t value)
 	monitoring__gauge_set(rpcs_inflight, value);
 }
 
+#ifdef _USE_NFS3
 void nfs_metrics__nfs3_request(uint32_t proc, nsecs_elapsed_t request_time,
 			       nfsstat3 nfs_status, export_id_t export_id,
 			       const char *client_ip)
@@ -330,6 +331,7 @@ void nfs_metrics__nfs3_request(uint32_t proc, nsecs_elapsed_t request_time,
 						version, statusLabel, export_id,
 						client_ip);
 }
+#endif
 
 void nfs_metrics__nfs4_request(uint32_t op, nsecs_elapsed_t request_time,
 			       nfsstat4 status, export_id_t export_id,
