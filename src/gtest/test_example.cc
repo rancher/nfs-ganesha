@@ -31,20 +31,21 @@
 #include "gtest/gtest.h"
 
 extern "C" {
-  /* Ganesha headers */
+/* Ganesha headers */
 }
 
-namespace {
-  bool global_decls = false;
+namespace
+{
+bool global_decls = false;
 } /* namespace */
 
 TEST(EXAMPLE, INIT)
 {
-  ASSERT_EQ(0, 0);
+	ASSERT_EQ(0, 0);
 }
 
 int main(int argc, char *argv[])
 {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+	::testing::InitGoogleTest(&argc, argv);
+	return RUN_ALL_TESTS();
 }

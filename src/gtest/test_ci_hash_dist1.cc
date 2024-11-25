@@ -50,19 +50,20 @@ extern "C" {
 
 namespace bf = boost::filesystem;
 
-namespace {
+namespace
+{
 
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
+char *ganesha_conf = nullptr;
+char *lpath = nullptr;
+int dlevel = -1;
+uint16_t export_id = 77;
 
-  struct req_op_context req_ctx;
-  struct fsal_attrlist object_attributes;
+struct req_op_context req_ctx;
+struct fsal_attrlist object_attributes;
 
-  struct gsh_export* a_export = nullptr;
-  struct fsal_obj_handle *root_entry = nullptr;
-  struct fsal_obj_handle *test_root = nullptr;
+struct gsh_export *a_export = nullptr;
+struct fsal_obj_handle *root_entry = nullptr;
+struct fsal_obj_handle *test_root = nullptr;
 
 #if 0
   std::uniform_int_distribution<uint8_t> uint_dist;
@@ -71,115 +72,110 @@ namespace {
   p->cksum = XXH64(p->data, 65536, 8675309);
 #endif
 
-  int ganesha_server() {
-    /* XXX */
-    return nfs_libmain(
-      ganesha_conf,
-      lpath,
-      dlevel
-      );
-  }
+int ganesha_server()
+{
+	/* XXX */
+	return nfs_libmain(ganesha_conf, lpath, dlevel);
+}
 
 } /* namespace */
 
 TEST(CI_HASH_DIST1, INIT)
 {
-  fsal_status_t status;
+	fsal_status_t status;
 
-  a_export = get_gsh_export(export_id);
-  ASSERT_NE(a_export, nullptr);
+	a_export = get_gsh_export(export_id);
+	ASSERT_NE(a_export, nullptr);
 
-  status = nfs_export_get_root_entry(a_export, &root_entry);
-  ASSERT_NE(root_entry, nullptr);
+	status = nfs_export_get_root_entry(a_export, &root_entry);
+	ASSERT_NE(root_entry, nullptr);
 
-  /* Ganesha call paths need real or forged context info */
-  init_op_context_simple(&req_ctx, a_export, a_export->fsal_export);
-  memset(&object_attributes, 0, sizeof(object_attributes));
+	/* Ganesha call paths need real or forged context info */
+	init_op_context_simple(&req_ctx, a_export, a_export->fsal_export);
+	memset(&object_attributes, 0, sizeof(object_attributes));
 }
 
 TEST(CI_HASH_DIST1, CREATE_ROOT)
 {
-  fsal_status_t status;
-  struct fsal_attrlist *attrs_out = nullptr;
+	fsal_status_t status;
+	struct fsal_attrlist *attrs_out = nullptr;
 
-  // create root directory for test
-  FSAL_SET_MASK(object_attributes.request_mask,
-		ATTR_MODE | ATTR_OWNER | ATTR_GROUP);
-  object_attributes.mode = 777; /* XXX */
-  object_attributes.owner = 667;
-  object_attributes.group = 766;
+	// create root directory for test
+	FSAL_SET_MASK(object_attributes.request_mask,
+		      ATTR_MODE | ATTR_OWNER | ATTR_GROUP);
+	object_attributes.mode = 777; /* XXX */
+	object_attributes.owner = 667;
+	object_attributes.group = 766;
 
-  status = root_entry->obj_ops->mkdir(root_entry, "ci_hash_dist1",
-				    &object_attributes, &test_root,
-				    attrs_out, nullptr, nullptr);
-  ASSERT_NE(test_root, nullptr);
+	status = root_entry->obj_ops->mkdir(root_entry, "ci_hash_dist1",
+					    &object_attributes, &test_root,
+					    attrs_out, nullptr, nullptr);
+	ASSERT_NE(test_root, nullptr);
 }
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
+	int code = 0;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-	"path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::store(po::parse_command_line(argc, argv, opts), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-	"log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
 
-      ("export", po::value<uint16_t>(),
-	"id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
 
-      ("debug", po::value<string>(),
-	"ganesha debug level")
-      ;
+		std::thread ganesha(ganesha_server);
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 
-    po::variables_map::iterator vm_iter;
-    po::store(po::parse_command_line(argc, argv, opts), vm);
-    po::notify(vm);
+		code = RUN_ALL_TESTS();
+		ganesha.join();
+	}
 
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-	(char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-    ::testing::InitGoogleTest(&argc, argv);
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-    std::thread ganesha(ganesha_server);
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-
-    code  = RUN_ALL_TESTS();
-    ganesha.join();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }

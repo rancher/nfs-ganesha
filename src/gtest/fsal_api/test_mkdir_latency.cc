@@ -53,338 +53,346 @@ void admin_halt(void);
 #define FILE_COUNT 100000
 #define LOOP_COUNT 1000000
 
-namespace {
+namespace
+{
 
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
-  char* event_list = nullptr;
-  char* profile_out = nullptr;
+char *ganesha_conf = nullptr;
+char *lpath = nullptr;
+int dlevel = -1;
+uint16_t export_id = 77;
+char *event_list = nullptr;
+char *profile_out = nullptr;
 
-  class MkdirEmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
-  protected:
+class MkdirEmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
+    protected:
+	virtual void SetUp()
+	{
+		gtest::GaneshaFSALBaseTest::SetUp();
+	}
 
-    virtual void SetUp() {
-      gtest::GaneshaFSALBaseTest::SetUp();
-    }
+	virtual void TearDown()
+	{
+		gtest::GaneshaFSALBaseTest::TearDown();
+	}
+};
 
-    virtual void TearDown() {
-      gtest::GaneshaFSALBaseTest::TearDown();
-    }
-  };
+class MkdirFullLatencyTest : public MkdirEmptyLatencyTest {
+    protected:
+	virtual void SetUp()
+	{
+		fsal_status_t status;
+		char fname[NAMELEN];
+		struct fsal_obj_handle *obj;
+		struct fsal_attrlist attrs_out;
 
-  class MkdirFullLatencyTest : public MkdirEmptyLatencyTest {
-  protected:
+		MkdirEmptyLatencyTest::SetUp();
 
-    virtual void SetUp() {
-      fsal_status_t status;
-      char fname[NAMELEN];
-      struct fsal_obj_handle *obj;
-      struct fsal_attrlist attrs_out;
+		/* create a bunch of dirents */
+		for (int i = 0; i < FILE_COUNT; ++i) {
+			fsal_prepare_attrs(&attrs_out, 0);
+			sprintf(fname, "f-%08x", i);
 
-      MkdirEmptyLatencyTest::SetUp();
+			status = fsal_create(test_root, fname, REGULAR_FILE,
+					     &attrs, NULL, &obj, &attrs_out,
+					     nullptr, nullptr);
+			ASSERT_EQ(status.major, 0);
+			ASSERT_NE(obj, nullptr);
 
-      /* create a bunch of dirents */
-      for (int i = 0; i < FILE_COUNT; ++i) {
-        fsal_prepare_attrs(&attrs_out, 0);
-        sprintf(fname, "f-%08x", i);
+			fsal_release_attrs(&attrs_out);
+			obj->obj_ops->put_ref(obj);
+		}
+	}
 
-        status = fsal_create(test_root, fname, REGULAR_FILE, &attrs, NULL, &obj,
-                             &attrs_out, nullptr, nullptr);
-        ASSERT_EQ(status.major, 0);
-        ASSERT_NE(obj, nullptr);
+	virtual void TearDown()
+	{
+		fsal_status_t status;
+		char fname[NAMELEN];
 
-	fsal_release_attrs(&attrs_out);
-        obj->obj_ops->put_ref(obj);
-      }
-    }
+		for (int i = 0; i < FILE_COUNT; ++i) {
+			sprintf(fname, "f-%08x", i);
 
-    virtual void TearDown() {
-      fsal_status_t status;
-      char fname[NAMELEN];
+			status = fsal_remove(test_root, fname, NULL, NULL);
+			EXPECT_EQ(status.major, 0);
+		}
 
-      for (int i = 0; i < FILE_COUNT; ++i) {
-        sprintf(fname, "f-%08x", i);
-
-        status = fsal_remove(test_root, fname, NULL, NULL);
-        EXPECT_EQ(status.major, 0);
-      }
-
-      MkdirEmptyLatencyTest::TearDown();
-    }
-
-  };
+		MkdirEmptyLatencyTest::TearDown();
+	}
+};
 
 } /* namespace */
 
 TEST_F(MkdirEmptyLatencyTest, SIMPLE)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *mkdir;
-  struct fsal_obj_handle *lookup;
+	fsal_status_t status;
+	struct fsal_obj_handle *mkdir;
+	struct fsal_obj_handle *lookup;
 
-  status = test_root->obj_ops->mkdir(test_root, TEST_ROOT, &attrs, &mkdir, NULL, nullptr, nullptr);
-  EXPECT_EQ(status.major, 0);
-  test_root->obj_ops->lookup(test_root, TEST_ROOT, &lookup, NULL);
-  EXPECT_EQ(lookup, mkdir);
+	status = test_root->obj_ops->mkdir(test_root, TEST_ROOT, &attrs, &mkdir,
+					   NULL, nullptr, nullptr);
+	EXPECT_EQ(status.major, 0);
+	test_root->obj_ops->lookup(test_root, TEST_ROOT, &lookup, NULL);
+	EXPECT_EQ(lookup, mkdir);
 
-  mkdir->obj_ops->put_ref(mkdir);
-  lookup->obj_ops->put_ref(lookup);
+	mkdir->obj_ops->put_ref(mkdir);
+	lookup->obj_ops->put_ref(lookup);
 
-  /* Remove directory created while running test */
-  status = fsal_remove(test_root, TEST_ROOT, NULL, NULL);
-  ASSERT_EQ(status.major, 0);
+	/* Remove directory created while running test */
+	status = fsal_remove(test_root, TEST_ROOT, NULL, NULL);
+	ASSERT_EQ(status.major, 0);
 }
 
 TEST_F(MkdirEmptyLatencyTest, SIMPLE_BYPASS)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *sub_hdl;
-  struct fsal_obj_handle *mkdir;
-  struct fsal_obj_handle *lookup;
+	fsal_status_t status;
+	struct fsal_obj_handle *sub_hdl;
+	struct fsal_obj_handle *mkdir;
+	struct fsal_obj_handle *lookup;
 
-  sub_hdl = mdcdb_get_sub_handle(test_root);
-  ASSERT_NE(sub_hdl, nullptr);
+	sub_hdl = mdcdb_get_sub_handle(test_root);
+	ASSERT_NE(sub_hdl, nullptr);
 
-  gtws_subcall(
-    status = sub_hdl->obj_ops->mkdir(sub_hdl, TEST_ROOT, &attrs, &mkdir, NULL, nullptr, nullptr)
-    );
+	gtws_subcall(status = sub_hdl->obj_ops->mkdir(sub_hdl, TEST_ROOT,
+						      &attrs, &mkdir, NULL,
+						      nullptr, nullptr));
 
-  EXPECT_EQ(status.major, 0);
-  sub_hdl->obj_ops->lookup(sub_hdl, TEST_ROOT, &lookup, NULL);
-  EXPECT_EQ(lookup, mkdir);
+	EXPECT_EQ(status.major, 0);
+	sub_hdl->obj_ops->lookup(sub_hdl, TEST_ROOT, &lookup, NULL);
+	EXPECT_EQ(lookup, mkdir);
 
-  lookup->obj_ops->put_ref(lookup);
+	lookup->obj_ops->put_ref(lookup);
 
-  /* Remove directory created while running test */
-  status = sub_hdl->obj_ops->unlink(sub_hdl, mkdir, TEST_ROOT, nullptr, nullptr);
-  ASSERT_EQ(status.major, 0);
+	/* Remove directory created while running test */
+	status = sub_hdl->obj_ops->unlink(sub_hdl, mkdir, TEST_ROOT, nullptr,
+					  nullptr);
+	ASSERT_EQ(status.major, 0);
 
-  mkdir->obj_ops->put_ref(mkdir);
+	mkdir->obj_ops->put_ref(mkdir);
 }
 
 TEST_F(MkdirEmptyLatencyTest, LOOP)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = test_root->obj_ops->mkdir(test_root, fname, &attrs, &obj, NULL, nullptr, nullptr);
-    EXPECT_EQ(status.major, 0);
-    obj->obj_ops->put_ref(obj);
-  }
+		status = test_root->obj_ops->mkdir(
+			test_root, fname, &attrs, &obj, NULL, nullptr, nullptr);
+		EXPECT_EQ(status.major, 0);
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per mkdir: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per mkdir: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove directories created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove directories created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-  }
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 TEST_F(MkdirEmptyLatencyTest, FSALCREATE)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_create(test_root, fname, DIRECTORY, &attrs, NULL, &obj, NULL, nullptr, nullptr);
-    EXPECT_EQ(status.major, 0);
-    obj->obj_ops->put_ref(obj);
-  }
+		status = fsal_create(test_root, fname, DIRECTORY, &attrs, NULL,
+				     &obj, NULL, nullptr, nullptr);
+		EXPECT_EQ(status.major, 0);
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per fsal_create: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per fsal_create: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove directories created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove directories created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-   }
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 TEST_F(MkdirFullLatencyTest, BIG)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = test_root->obj_ops->mkdir(test_root, fname, &attrs, &obj, NULL, nullptr, nullptr);
-    ASSERT_EQ(status.major, 0) << " failed to mkdir " << fname;
-    obj->obj_ops->put_ref(obj);
-  }
+		status = test_root->obj_ops->mkdir(
+			test_root, fname, &attrs, &obj, NULL, nullptr, nullptr);
+		ASSERT_EQ(status.major, 0) << " failed to mkdir " << fname;
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per mkdir: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per mkdir: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove directories created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove directories created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-  }
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 TEST_F(MkdirFullLatencyTest, BIG_BYPASS)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *sub_hdl;
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *sub_hdl;
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  sub_hdl = mdcdb_get_sub_handle(test_root);
-  ASSERT_NE(sub_hdl, nullptr);
+	sub_hdl = mdcdb_get_sub_handle(test_root);
+	ASSERT_NE(sub_hdl, nullptr);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    gtws_subcall(
-      status = sub_hdl->obj_ops->mkdir(sub_hdl, fname, &attrs, &obj, NULL, nullptr, nullptr)
-      );
-    ASSERT_EQ(status.major, 0) << " failed to mkdir " << fname;
-    obj->obj_ops->put_ref(obj);
-  }
+		gtws_subcall(status = sub_hdl->obj_ops->mkdir(
+				     sub_hdl, fname, &attrs, &obj, NULL,
+				     nullptr, nullptr));
+		ASSERT_EQ(status.major, 0) << " failed to mkdir " << fname;
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per mkdir: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per mkdir: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove directories created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove directories created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    sub_hdl->obj_ops->lookup(sub_hdl, fname, &obj, NULL);
-    status = sub_hdl->obj_ops->unlink(sub_hdl, obj, fname, nullptr, nullptr);
-    ASSERT_EQ(status.major, 0);
+		sub_hdl->obj_ops->lookup(sub_hdl, fname, &obj, NULL);
+		status = sub_hdl->obj_ops->unlink(sub_hdl, obj, fname, nullptr,
+						  nullptr);
+		ASSERT_EQ(status.major, 0);
 
-    obj->obj_ops->put_ref(obj);
-  }
+		obj->obj_ops->put_ref(obj);
+	}
 }
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
-  char* session_name = NULL;
+	int code = 0;
+	char *session_name = NULL;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
+		opts.add_options()("session", po::value<string>(),
+				   "LTTng session name");
+		opts.add_options()("event-list", po::value<string>(),
+				   "LTTng event list, comma separated");
+		opts.add_options()("profile", po::value<string>(),
+				   "Enable profiling and set output file.");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-       "path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::command_line_parser parser{ argc, argv };
+		parser.options(opts).allow_unregistered();
+		po::store(parser.run(), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-       "log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
+		vm_iter = vm.find("session");
+		if (vm_iter != vm.end()) {
+			session_name = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("event-list");
+		if (vm_iter != vm.end()) {
+			event_list = (char *)vm_iter->second.as<std::string>()
+					     .c_str();
+		}
+		vm_iter = vm.find("profile");
+		if (vm_iter != vm.end()) {
+			profile_out = (char *)vm_iter->second.as<std::string>()
+					      .c_str();
+		}
 
-      ("export", po::value<uint16_t>(),
-       "id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
+		gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
+						    session_name, TEST_ROOT,
+						    export_id);
+		::testing::AddGlobalTestEnvironment(gtest::env);
 
-      ("debug", po::value<string>(),
-       "ganesha debug level")
+		code = RUN_ALL_TESTS();
+	}
 
-      ("session", po::value<string>(),
-	"LTTng session name")
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-      ("event-list", po::value<string>(),
-	"LTTng event list, comma separated")
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-      ("profile", po::value<string>(),
-	"Enable profiling and set output file.")
-      ;
-
-    po::variables_map::iterator vm_iter;
-    po::command_line_parser parser{argc, argv};
-    parser.options(opts).allow_unregistered();
-    po::store(parser.run(), vm);
-    po::notify(vm);
-
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-	(char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
-    vm_iter = vm.find("session");
-    if (vm_iter != vm.end()) {
-      session_name = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("event-list");
-    if (vm_iter != vm.end()) {
-      event_list = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("profile");
-    if (vm_iter != vm.end()) {
-      profile_out = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-
-    ::testing::InitGoogleTest(&argc, argv);
-    gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
-					session_name, TEST_ROOT, export_id);
-    ::testing::AddGlobalTestEnvironment(gtest::env);
-
-    code  = RUN_ALL_TESTS();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }

@@ -54,154 +54,166 @@ void admin_halt(void);
 #define TEST_DIR "test_directory"
 #define DIR_COUNT 100000
 
-namespace {
+namespace
+{
 
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
-  char* event_list = nullptr;
-  char* profile_out = nullptr;
+char *ganesha_conf = nullptr;
+char *lpath = nullptr;
+int dlevel = -1;
+uint16_t export_id = 77;
+char *event_list = nullptr;
+char *profile_out = nullptr;
 
-  typedef struct {
-    struct gsh_buffdesc *keys;
-    bool *hdl_found;
-    std::string *names;
-  } rd_state_t;
+typedef struct {
+	struct gsh_buffdesc *keys;
+	bool *hdl_found;
+	std::string *names;
+} rd_state_t;
 
-  class ReaddirEmptyCorrectnessTest : public gtest::GaneshaFSALBaseTest {
-  protected:
+class ReaddirEmptyCorrectnessTest : public gtest::GaneshaFSALBaseTest {
+    protected:
+	virtual void SetUp()
+	{
+		fsal_status_t status;
+		struct fsal_attrlist attrs_out;
 
-    virtual void SetUp() {
-      fsal_status_t status;
-      struct fsal_attrlist attrs_out;
+		gtest::GaneshaFSALBaseTest::SetUp();
 
-      gtest::GaneshaFSALBaseTest::SetUp();
+		status = fsal_create(test_root, TEST_DIR, DIRECTORY, &attrs,
+				     NULL, &test_dir, &attrs_out, nullptr,
+				     nullptr);
+		ASSERT_EQ(status.major, 0);
+		ASSERT_NE(test_dir, nullptr);
 
-      status = fsal_create(test_root, TEST_DIR, DIRECTORY, &attrs, NULL,
-		      &test_dir, &attrs_out, nullptr, nullptr);
-      ASSERT_EQ(status.major, 0);
-      ASSERT_NE(test_dir, nullptr);
+		fsal_release_attrs(&attrs_out);
+	}
 
-      fsal_release_attrs(&attrs_out);
-    }
+	virtual void TearDown()
+	{
+		fsal_status_t status;
 
-    virtual void TearDown() {
-      fsal_status_t status;
+		status = test_root->obj_ops->unlink(test_root, test_dir,
+						    TEST_DIR, nullptr, nullptr);
+		EXPECT_EQ(0, status.major);
+		test_dir->obj_ops->put_ref(test_dir);
+		test_dir = NULL;
 
-      status = test_root->obj_ops->unlink(test_root, test_dir, TEST_DIR, nullptr, nullptr);
-      EXPECT_EQ(0, status.major);
-      test_dir->obj_ops->put_ref(test_dir);
-      test_dir = NULL;
+		gtest::GaneshaFSALBaseTest::TearDown();
+	}
 
-      gtest::GaneshaFSALBaseTest::TearDown();
-    }
+	struct fsal_obj_handle *test_dir = nullptr;
+};
 
-    struct fsal_obj_handle *test_dir = nullptr;
-  };
+class ReaddirFullCorrectnessTest : public ReaddirEmptyCorrectnessTest {
+    protected:
+	virtual void SetUp()
+	{
+		struct fsal_obj_handle *dir_hdls[DIR_COUNT];
 
-  class ReaddirFullCorrectnessTest : public ReaddirEmptyCorrectnessTest {
-  protected:
+		ReaddirEmptyCorrectnessTest::SetUp();
 
-    virtual void SetUp() {
-      struct fsal_obj_handle *dir_hdls[DIR_COUNT];
+		create_and_prime_many(DIR_COUNT, dir_hdls, test_dir);
 
-      ReaddirEmptyCorrectnessTest::SetUp();
+		for (int i = 0; i < DIR_COUNT; i++) {
+			struct gsh_buffdesc fh_desc;
+			std::stringstream sstr;
 
-      create_and_prime_many(DIR_COUNT, dir_hdls, test_dir);
+			dir_hdls[i]->obj_ops->handle_to_key(dir_hdls[i],
+							    &fh_desc);
+			keyDup(&keys[i], &fh_desc);
+			sstr << "f-" << std::setfill('0') << std::setw(8)
+			     << std::hex << i;
+			names[i] = sstr.str();
+			sstr.str("");
+			sstr.clear();
 
-      for (int i = 0; i < DIR_COUNT; i++) {
+			dir_hdls[i]->obj_ops->put_ref(dir_hdls[i]);
+		}
+
+		/* Clean up extra entries */
+		mdcache_lru_release_entries(-1);
+	}
+
+	virtual void TearDown()
+	{
+		remove_many(DIR_COUNT, NULL, test_dir);
+
+		for (int i = 0; i < DIR_COUNT; i++) {
+			gsh_free(keys[i].addr);
+		}
+
+		ReaddirEmptyCorrectnessTest::TearDown();
+	}
+
+	void keyDup(struct gsh_buffdesc *dest, struct gsh_buffdesc *src)
+	{
+		dest->len = src->len;
+		dest->addr = gsh_malloc(src->len);
+		memcpy(dest->addr, src->addr, src->len);
+	}
+
+	struct gsh_buffdesc keys[DIR_COUNT];
+	std::string names[DIR_COUNT];
+	bool hdl_found[DIR_COUNT] = { false };
+};
+
+bool keyEQ(struct gsh_buffdesc *key1, struct gsh_buffdesc *key2)
+{
+	if (key1->len != key2->len)
+		return false;
+	return !memcmp(key1->addr, key2->addr, key1->len);
+}
+
+enum fsal_dir_result trc_populate_dirent(const char *name,
+					 struct fsal_obj_handle *obj,
+					 struct fsal_attrlist *attrs,
+					 void *dir_state, fsal_cookie_t cookie)
+{
+	rd_state_t *st = (rd_state_t *)dir_state;
 	struct gsh_buffdesc fh_desc;
-	std::stringstream sstr;
 
-	dir_hdls[i]->obj_ops->handle_to_key(dir_hdls[i], &fh_desc);
-	keyDup(&keys[i], &fh_desc);
-	sstr << "f-" << std::setfill('0') << std::setw(8) << std::hex << i;
-	names[i] = sstr.str();
-	sstr.str("");
-	sstr.clear();
+	obj->obj_ops->handle_to_key(obj, &fh_desc);
 
-	dir_hdls[i]->obj_ops->put_ref(dir_hdls[i]);
-      }
-
-      /* Clean up extra entries */
-      mdcache_lru_release_entries(-1);
-    }
-
-    virtual void TearDown() {
-      remove_many(DIR_COUNT, NULL, test_dir);
-
-      for (int i = 0; i < DIR_COUNT; i++) {
-	gsh_free(keys[i].addr);
-      }
-
-      ReaddirEmptyCorrectnessTest::TearDown();
-    }
-
-    void keyDup(struct gsh_buffdesc *dest, struct gsh_buffdesc *src) {
-      dest->len = src->len;
-      dest->addr = gsh_malloc(src->len);
-      memcpy(dest->addr, src->addr, src->len);
-    }
-
-    struct gsh_buffdesc keys[DIR_COUNT];
-    std::string names[DIR_COUNT];
-    bool hdl_found[DIR_COUNT] = { false };
-
-  };
-
-  bool keyEQ(struct gsh_buffdesc *key1, struct gsh_buffdesc *key2) {
-    if (key1->len != key2->len)
-      return false;
-    return !memcmp(key1->addr, key2->addr, key1->len);
-  }
-
-  enum fsal_dir_result trc_populate_dirent(const char *name,
-      struct fsal_obj_handle *obj, struct fsal_attrlist *attrs, void *dir_state,
-      fsal_cookie_t cookie) {
-    rd_state_t *st = (rd_state_t*)dir_state;
-    struct gsh_buffdesc fh_desc;
-
-    obj->obj_ops->handle_to_key(obj, &fh_desc);
-
-    for (int i = 0; i < DIR_COUNT; i++) {
-      if (keyEQ(&st->keys[i], &fh_desc)) {
-	EXPECT_EQ(false, st->hdl_found[i]) << st->names[i];
-	st->hdl_found[i] = true;
-	break;
-      }
-    }
-    obj->obj_ops->put_ref(obj);
-    return DIR_CONTINUE;
-  }
+	for (int i = 0; i < DIR_COUNT; i++) {
+		if (keyEQ(&st->keys[i], &fh_desc)) {
+			EXPECT_EQ(false, st->hdl_found[i]) << st->names[i];
+			st->hdl_found[i] = true;
+			break;
+		}
+	}
+	obj->obj_ops->put_ref(obj);
+	return DIR_CONTINUE;
+}
 } /* namespace */
 
 TEST_F(ReaddirFullCorrectnessTest, BIG)
 {
-  fsal_status_t status;
-  uint64_t whence = 0;
-  bool eod = false;
-  rd_state_t st;
+	fsal_status_t status;
+	uint64_t whence = 0;
+	bool eod = false;
+	rd_state_t st;
 
-  st.keys = keys;
-  st.hdl_found = hdl_found;
-  st.names = names;
+	st.keys = keys;
+	st.hdl_found = hdl_found;
+	st.names = names;
 
-  status = test_dir->obj_ops->readdir(test_dir, &whence, &st, trc_populate_dirent, 0, &eod);
-  ASSERT_EQ(status.major, 0);
+	status = test_dir->obj_ops->readdir(test_dir, &whence, &st,
+					    trc_populate_dirent, 0, &eod);
+	ASSERT_EQ(status.major, 0);
 
-  for (int i=0; i < DIR_COUNT; i++) {
-    ASSERT_EQ(true, hdl_found[i]) << names[i];
-    hdl_found[i] = false;
-  }
+	for (int i = 0; i < DIR_COUNT; i++) {
+		ASSERT_EQ(true, hdl_found[i]) << names[i];
+		hdl_found[i] = false;
+	}
 
-  status = test_dir->obj_ops->readdir(test_dir, &whence, &st, trc_populate_dirent, 0, &eod);
-  ASSERT_EQ(status.major, 0);
+	status = test_dir->obj_ops->readdir(test_dir, &whence, &st,
+					    trc_populate_dirent, 0, &eod);
+	ASSERT_EQ(status.major, 0);
 
-  for (int i=0; i < DIR_COUNT; i++) {
-    ASSERT_EQ(true, hdl_found[i]) << names[i];
-    hdl_found[i] = false;
-  }
+	for (int i = 0; i < DIR_COUNT; i++) {
+		ASSERT_EQ(true, hdl_found[i]) << names[i];
+		hdl_found[i] = false;
+	}
 }
 
 #if 0
@@ -231,92 +243,91 @@ TEST_F(ReaddirFullCorrectnessTest, BIG_BYPASS)
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
-  char* session_name = NULL;
+	int code = 0;
+	char *session_name = NULL;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
+		opts.add_options()("session", po::value<string>(),
+				   "LTTng session name");
+		opts.add_options()("event-list", po::value<string>(),
+				   "LTTng event list, comma separated");
+		opts.add_options()("profile", po::value<string>(),
+				   "Enable profiling and set output file.");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-       "path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::command_line_parser parser{ argc, argv };
+		parser.options(opts).allow_unregistered();
+		po::store(parser.run(), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-       "log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
+		vm_iter = vm.find("session");
+		if (vm_iter != vm.end()) {
+			session_name = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("event-list");
+		if (vm_iter != vm.end()) {
+			event_list = (char *)vm_iter->second.as<std::string>()
+					     .c_str();
+		}
+		vm_iter = vm.find("profile");
+		if (vm_iter != vm.end()) {
+			profile_out = (char *)vm_iter->second.as<std::string>()
+					      .c_str();
+		}
 
-      ("export", po::value<uint16_t>(),
-       "id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
+		gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
+						    session_name, TEST_ROOT,
+						    export_id);
+		::testing::AddGlobalTestEnvironment(gtest::env);
 
-      ("debug", po::value<string>(),
-       "ganesha debug level")
+		code = RUN_ALL_TESTS();
+	}
 
-      ("session", po::value<string>(),
-	"LTTng session name")
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-      ("event-list", po::value<string>(),
-	"LTTng event list, comma separated")
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-      ("profile", po::value<string>(),
-	"Enable profiling and set output file.")
-      ;
-
-    po::variables_map::iterator vm_iter;
-    po::command_line_parser parser{argc, argv};
-    parser.options(opts).allow_unregistered();
-    po::store(parser.run(), vm);
-    po::notify(vm);
-
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-	(char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
-    vm_iter = vm.find("session");
-    if (vm_iter != vm.end()) {
-      session_name = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("event-list");
-    if (vm_iter != vm.end()) {
-      event_list = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("profile");
-    if (vm_iter != vm.end()) {
-      profile_out = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-
-    ::testing::InitGoogleTest(&argc, argv);
-    gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
-					session_name, TEST_ROOT, export_id);
-    ::testing::AddGlobalTestEnvironment(gtest::env);
-
-    code  = RUN_ALL_TESTS();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }

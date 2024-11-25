@@ -53,320 +53,321 @@ void admin_halt(void);
 #define FILE_COUNT 100000
 #define LOOP_COUNT 1000000
 
-namespace {
+namespace
+{
 
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
-  char* event_list = nullptr;
-  char* profile_out = nullptr;
+char *ganesha_conf = nullptr;
+char *lpath = nullptr;
+int dlevel = -1;
+uint16_t export_id = 77;
+char *event_list = nullptr;
+char *profile_out = nullptr;
 
-  class LookupEmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
-  protected:
+class LookupEmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
+    protected:
+	virtual void SetUp()
+	{
+		gtest::GaneshaFSALBaseTest::SetUp();
+	}
 
-    virtual void SetUp() {
-      gtest::GaneshaFSALBaseTest::SetUp();
-    }
+	virtual void TearDown()
+	{
+		gtest::GaneshaFSALBaseTest::TearDown();
+	}
+};
 
-    virtual void TearDown() {
-      gtest::GaneshaFSALBaseTest::TearDown();
-    }
-  };
+class LookupFullLatencyTest : public LookupEmptyLatencyTest {
+    protected:
+	virtual void SetUp()
+	{
+		LookupEmptyLatencyTest::SetUp();
 
-  class LookupFullLatencyTest : public LookupEmptyLatencyTest {
+		create_and_prime_many(FILE_COUNT, NULL);
+	}
 
-  protected:
+	virtual void TearDown()
+	{
+		remove_many(FILE_COUNT, NULL);
 
-    virtual void SetUp() {
-      LookupEmptyLatencyTest::SetUp();
-
-      create_and_prime_many(FILE_COUNT, NULL);
-    }
-
-    virtual void TearDown() {
-      remove_many(FILE_COUNT, NULL);
-
-      LookupEmptyLatencyTest::TearDown();
-    }
-
-  };
+		LookupEmptyLatencyTest::TearDown();
+	}
+};
 
 } /* namespace */
 
 TEST_F(LookupEmptyLatencyTest, SIMPLE)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *lookup;
+	fsal_status_t status;
+	struct fsal_obj_handle *lookup;
 
-  enableEvents(event_list);
+	enableEvents(event_list);
 
-  status = root_entry->obj_ops->lookup(root_entry, TEST_ROOT, &lookup, NULL);
-  EXPECT_EQ(status.major, 0);
-  EXPECT_EQ(test_root, lookup);
+	status = root_entry->obj_ops->lookup(root_entry, TEST_ROOT, &lookup,
+					     NULL);
+	EXPECT_EQ(status.major, 0);
+	EXPECT_EQ(test_root, lookup);
 
-  disableEvents(event_list);
+	disableEvents(event_list);
 
-  lookup->obj_ops->put_ref(lookup);
+	lookup->obj_ops->put_ref(lookup);
 }
 
 TEST_F(LookupEmptyLatencyTest, SIMPLE_BYPASS)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *sub_hdl;
-  struct fsal_obj_handle *lookup;
+	fsal_status_t status;
+	struct fsal_obj_handle *sub_hdl;
+	struct fsal_obj_handle *lookup;
 
-  enableEvents(event_list);
+	enableEvents(event_list);
 
-  sub_hdl = mdcdb_get_sub_handle(root_entry);
-  ASSERT_NE(sub_hdl, nullptr);
-  status = sub_hdl->obj_ops->lookup(sub_hdl, TEST_ROOT, &lookup, NULL);
-  EXPECT_EQ(status.major, 0);
-  EXPECT_EQ(mdcdb_get_sub_handle(test_root), lookup);
+	sub_hdl = mdcdb_get_sub_handle(root_entry);
+	ASSERT_NE(sub_hdl, nullptr);
+	status = sub_hdl->obj_ops->lookup(sub_hdl, TEST_ROOT, &lookup, NULL);
+	EXPECT_EQ(status.major, 0);
+	EXPECT_EQ(mdcdb_get_sub_handle(test_root), lookup);
 
-  disableEvents(event_list);
+	disableEvents(event_list);
 
-  lookup->obj_ops->put_ref(lookup);
+	lookup->obj_ops->put_ref(lookup);
 }
 
 TEST_F(LookupEmptyLatencyTest, LOOP)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *lookup;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	struct fsal_obj_handle *lookup;
+	struct timespec s_time, e_time;
 
-  enableEvents(event_list);
+	enableEvents(event_list);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    status = root_entry->obj_ops->lookup(root_entry, TEST_ROOT, &lookup, NULL);
-    EXPECT_EQ(status.major, 0);
-    EXPECT_EQ(test_root, lookup);
-  }
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		status = root_entry->obj_ops->lookup(root_entry, TEST_ROOT,
+						     &lookup, NULL);
+		EXPECT_EQ(status.major, 0);
+		EXPECT_EQ(test_root, lookup);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  disableEvents(event_list);
+	disableEvents(event_list);
 
-  /* Have the put_ref()'s outside the latency loop */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    lookup->obj_ops->put_ref(lookup);
-  }
+	/* Have the put_ref()'s outside the latency loop */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		lookup->obj_ops->put_ref(lookup);
+	}
 
-  fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
-	  timespec_diff(&s_time, &e_time) / LOOP_COUNT);
-
+	fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 }
 
 TEST_F(LookupEmptyLatencyTest, FSALLOOKUP)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *lookup;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	struct fsal_obj_handle *lookup;
+	struct timespec s_time, e_time;
 
-  enableEvents(event_list);
+	enableEvents(event_list);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    status = fsal_lookup(root_entry, TEST_ROOT, &lookup, NULL);
-    EXPECT_EQ(status.major, 0);
-    EXPECT_EQ(test_root, lookup);
-  }
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		status = fsal_lookup(root_entry, TEST_ROOT, &lookup, NULL);
+		EXPECT_EQ(status.major, 0);
+		EXPECT_EQ(test_root, lookup);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  disableEvents(event_list);
+	disableEvents(event_list);
 
-  /* Have the put_ref()'s outside the latency loop */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    lookup->obj_ops->put_ref(lookup);
-  }
+	/* Have the put_ref()'s outside the latency loop */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		lookup->obj_ops->put_ref(lookup);
+	}
 
-  fprintf(stderr, "Average time per fsal_lookup: %" PRIu64 " ns\n",
-	  timespec_diff(&s_time, &e_time) / LOOP_COUNT);
-
+	fprintf(stderr, "Average time per fsal_lookup: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 }
 
 TEST_F(LookupFullLatencyTest, BIG_SINGLE)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  enableEvents(event_list);
+	enableEvents(event_list);
 
-  now(&s_time);
+	now(&s_time);
 
-  sprintf(fname, "f-%08x", FILE_COUNT / 5);
+	sprintf(fname, "f-%08x", FILE_COUNT / 5);
 
-  status = test_root->obj_ops->lookup(test_root, fname, &obj, NULL);
-  ASSERT_EQ(status.major, 0) << " failed to lookup " << fname;
-  obj->obj_ops->put_ref(obj);
+	status = test_root->obj_ops->lookup(test_root, fname, &obj, NULL);
+	ASSERT_EQ(status.major, 0) << " failed to lookup " << fname;
+	obj->obj_ops->put_ref(obj);
 
-  now(&e_time);
+	now(&e_time);
 
-  disableEvents(event_list);
+	disableEvents(event_list);
 
-  fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
-	  timespec_diff(&s_time, &e_time));
+	fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time));
 }
 
 TEST_F(LookupFullLatencyTest, BIG)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  enableEvents(event_list);
-  if (profile_out)
-    ProfilerStart(profile_out);
+	enableEvents(event_list);
+	if (profile_out)
+		ProfilerStart(profile_out);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "f-%08x", i % FILE_COUNT);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "f-%08x", i % FILE_COUNT);
 
-    status = test_root->obj_ops->lookup(test_root, fname, &obj, NULL);
-    ASSERT_EQ(status.major, 0) << " failed to lookup " << fname;
-    obj->obj_ops->put_ref(obj);
-  }
+		status = test_root->obj_ops->lookup(test_root, fname, &obj,
+						    NULL);
+		ASSERT_EQ(status.major, 0) << " failed to lookup " << fname;
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  if (profile_out)
-    ProfilerStop();
-  disableEvents(event_list);
+	if (profile_out)
+		ProfilerStop();
+	disableEvents(event_list);
 
-  fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
-	  timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 }
 
 TEST_F(LookupFullLatencyTest, BIG_BYPASS)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *sub_hdl;
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *sub_hdl;
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  sub_hdl = mdcdb_get_sub_handle(test_root);
+	sub_hdl = mdcdb_get_sub_handle(test_root);
 
-  enableEvents(event_list);
-  if (profile_out)
-    ProfilerStart(profile_out);
+	enableEvents(event_list);
+	if (profile_out)
+		ProfilerStart(profile_out);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "f-%08x", i % FILE_COUNT);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "f-%08x", i % FILE_COUNT);
 
-    status = sub_hdl->obj_ops->lookup(sub_hdl, fname, &obj, NULL);
-    ASSERT_EQ(status.major, 0) << " failed to lookup " << fname;
-    obj->obj_ops->put_ref(obj);
-  }
+		status = sub_hdl->obj_ops->lookup(sub_hdl, fname, &obj, NULL);
+		ASSERT_EQ(status.major, 0) << " failed to lookup " << fname;
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  if (profile_out)
-    ProfilerStop();
-  disableEvents(event_list);
+	if (profile_out)
+		ProfilerStop();
+	disableEvents(event_list);
 
-  fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
-	  timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per lookup: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 }
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
-  char* session_name = NULL;
+	int code = 0;
+	char *session_name = NULL;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
+		opts.add_options()("session", po::value<string>(),
+				   "LTTng session name");
+		opts.add_options()("event-list", po::value<string>(),
+				   "LTTng event list, comma separated");
+		opts.add_options()("profile", po::value<string>(),
+				   "Enable profiling and set output file.");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-       "path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::command_line_parser parser{ argc, argv };
+		parser.options(opts).allow_unregistered();
+		po::store(parser.run(), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-       "log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
+		vm_iter = vm.find("session");
+		if (vm_iter != vm.end()) {
+			session_name = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("event-list");
+		if (vm_iter != vm.end()) {
+			event_list = (char *)vm_iter->second.as<std::string>()
+					     .c_str();
+		}
+		vm_iter = vm.find("profile");
+		if (vm_iter != vm.end()) {
+			profile_out = (char *)vm_iter->second.as<std::string>()
+					      .c_str();
+		}
 
-      ("export", po::value<uint16_t>(),
-       "id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
+		gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
+						    session_name, TEST_ROOT,
+						    export_id);
+		::testing::AddGlobalTestEnvironment(gtest::env);
 
-      ("debug", po::value<string>(),
-       "ganesha debug level")
+		code = RUN_ALL_TESTS();
+	}
 
-      ("session", po::value<string>(),
-	"LTTng session name")
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-      ("event-list", po::value<string>(),
-	"LTTng event list, comma separated")
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-      ("profile", po::value<string>(),
-	"Enable profiling and set output file.")
-      ;
-
-    po::variables_map::iterator vm_iter;
-    po::command_line_parser parser{argc, argv};
-    parser.options(opts).allow_unregistered();
-    po::store(parser.run(), vm);
-    po::notify(vm);
-
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-	(char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
-    vm_iter = vm.find("session");
-    if (vm_iter != vm.end()) {
-      session_name = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("event-list");
-    if (vm_iter != vm.end()) {
-      event_list = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("profile");
-    if (vm_iter != vm.end()) {
-      profile_out = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-
-    ::testing::InitGoogleTest(&argc, argv);
-    gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
-					session_name, TEST_ROOT, export_id);
-    ::testing::AddGlobalTestEnvironment(gtest::env);
-
-    code  = RUN_ALL_TESTS();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }

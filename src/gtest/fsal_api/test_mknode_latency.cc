@@ -54,342 +54,349 @@ void admin_halt(void);
 #define FILE_COUNT 100000
 #define LOOP_COUNT 1000000
 
-namespace {
+namespace
+{
 
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
-  char* event_list = nullptr;
-  char* profile_out = nullptr;
+char *ganesha_conf = nullptr;
+char *lpath = nullptr;
+int dlevel = -1;
+uint16_t export_id = 77;
+char *event_list = nullptr;
+char *profile_out = nullptr;
 
-  class MknodeEmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
-  protected:
+class MknodeEmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
+    protected:
+	virtual void SetUp()
+	{
+		gtest::GaneshaFSALBaseTest::SetUp();
+	}
 
-    virtual void SetUp() {
-      gtest::GaneshaFSALBaseTest::SetUp();
-    }
+	virtual void TearDown()
+	{
+		gtest::GaneshaFSALBaseTest::TearDown();
+	}
+};
 
-    virtual void TearDown() {
-      gtest::GaneshaFSALBaseTest::TearDown();
-    }
-  };
+class MknodeFullLatencyTest : public MknodeEmptyLatencyTest {
+    protected:
+	virtual void SetUp()
+	{
+		fsal_status_t status;
+		char fname[NAMELEN];
+		struct fsal_obj_handle *obj;
+		struct fsal_attrlist attrs_out;
 
-  class MknodeFullLatencyTest : public MknodeEmptyLatencyTest {
-  protected:
+		MknodeEmptyLatencyTest::SetUp();
 
-    virtual void SetUp() {
-      fsal_status_t status;
-      char fname[NAMELEN];
-      struct fsal_obj_handle *obj;
-      struct fsal_attrlist attrs_out;
+		/* create a bunch of dirents */
+		for (int i = 0; i < FILE_COUNT; ++i) {
+			fsal_prepare_attrs(&attrs_out, 0);
+			sprintf(fname, "f-%08x", i);
 
-      MknodeEmptyLatencyTest::SetUp();
+			status = fsal_create(test_root, fname, REGULAR_FILE,
+					     &attrs, NULL, &obj, &attrs_out,
+					     nullptr, nullptr);
+			ASSERT_EQ(status.major, 0);
+			ASSERT_NE(obj, nullptr);
 
-      /* create a bunch of dirents */
-      for (int i = 0; i < FILE_COUNT; ++i) {
-        fsal_prepare_attrs(&attrs_out, 0);
-        sprintf(fname, "f-%08x", i);
+			fsal_release_attrs(&attrs_out);
+			obj->obj_ops->put_ref(obj);
+		}
+	}
 
-        status = fsal_create(test_root, fname, REGULAR_FILE, &attrs, NULL,
-                   &obj, &attrs_out, nullptr, nullptr);
-        ASSERT_EQ(status.major, 0);
-        ASSERT_NE(obj, nullptr);
+	virtual void TearDown()
+	{
+		fsal_status_t status;
+		char fname[NAMELEN];
 
-	fsal_release_attrs(&attrs_out);
-        obj->obj_ops->put_ref(obj);
-      }
-    }
+		for (int i = 0; i < FILE_COUNT; ++i) {
+			sprintf(fname, "f-%08x", i);
 
-    virtual void TearDown() {
-      fsal_status_t status;
-      char fname[NAMELEN];
+			status = fsal_remove(test_root, fname, NULL, NULL);
+			EXPECT_EQ(status.major, 0);
+		}
 
-      for (int i = 0; i < FILE_COUNT; ++i) {
-        sprintf(fname, "f-%08x", i);
-
-        status = fsal_remove(test_root, fname, NULL, NULL);
-        EXPECT_EQ(status.major, 0);
-      }
-
-      MknodeEmptyLatencyTest::TearDown();
-    }
-
-  };
+		MknodeEmptyLatencyTest::TearDown();
+	}
+};
 
 } /* namespace */
 
 TEST_F(MknodeEmptyLatencyTest, SIMPLE)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *mknode;
-  struct fsal_obj_handle *lookup;
+	fsal_status_t status;
+	struct fsal_obj_handle *mknode;
+	struct fsal_obj_handle *lookup;
 
-  status = test_root->obj_ops->mknode(test_root, TEST_NODE, SOCKET_FILE,
-             &attrs, &mknode, NULL, nullptr, nullptr);
-  EXPECT_EQ(status.major, 0);
-  test_root->obj_ops->lookup(test_root, TEST_NODE, &lookup, NULL);
-  EXPECT_EQ(lookup, mknode);
+	status = test_root->obj_ops->mknode(test_root, TEST_NODE, SOCKET_FILE,
+					    &attrs, &mknode, NULL, nullptr,
+					    nullptr);
+	EXPECT_EQ(status.major, 0);
+	test_root->obj_ops->lookup(test_root, TEST_NODE, &lookup, NULL);
+	EXPECT_EQ(lookup, mknode);
 
-  mknode->obj_ops->put_ref(mknode);
-  lookup->obj_ops->put_ref(lookup);
+	mknode->obj_ops->put_ref(mknode);
+	lookup->obj_ops->put_ref(lookup);
 
-  /* Remove node created while running test */
-  status = fsal_remove(test_root, TEST_NODE, NULL, NULL);
-  ASSERT_EQ(status.major, 0);
+	/* Remove node created while running test */
+	status = fsal_remove(test_root, TEST_NODE, NULL, NULL);
+	ASSERT_EQ(status.major, 0);
 }
 
 TEST_F(MknodeEmptyLatencyTest, SIMPLE_BYPASS)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *sub_hdl;
-  struct fsal_obj_handle *mknode;
-  struct fsal_obj_handle *lookup;
+	fsal_status_t status;
+	struct fsal_obj_handle *sub_hdl;
+	struct fsal_obj_handle *mknode;
+	struct fsal_obj_handle *lookup;
 
-  sub_hdl = mdcdb_get_sub_handle(test_root);
-  ASSERT_NE(sub_hdl, nullptr);
+	sub_hdl = mdcdb_get_sub_handle(test_root);
+	ASSERT_NE(sub_hdl, nullptr);
 
-  status = nfs_export_get_root_entry(a_export, &sub_hdl);
-  ASSERT_EQ(status.major, 0);
+	status = nfs_export_get_root_entry(a_export, &sub_hdl);
+	ASSERT_EQ(status.major, 0);
 
-  status = sub_hdl->obj_ops->mknode(sub_hdl, TEST_NODE, SOCKET_FILE, &attrs,
-             &mknode, NULL, nullptr, nullptr);
-  EXPECT_EQ(status.major, 0);
+	status = sub_hdl->obj_ops->mknode(sub_hdl, TEST_NODE, SOCKET_FILE,
+					  &attrs, &mknode, NULL, nullptr,
+					  nullptr);
+	EXPECT_EQ(status.major, 0);
 
-  sub_hdl->obj_ops->lookup(sub_hdl, TEST_NODE, &lookup, NULL);
-  EXPECT_EQ(lookup, mknode);
+	sub_hdl->obj_ops->lookup(sub_hdl, TEST_NODE, &lookup, NULL);
+	EXPECT_EQ(lookup, mknode);
 
-  mknode->obj_ops->put_ref(mknode);
-  lookup->obj_ops->put_ref(lookup);
+	mknode->obj_ops->put_ref(mknode);
+	lookup->obj_ops->put_ref(lookup);
 
-  /* Remove node created while running test */
-  status = fsal_remove(sub_hdl, TEST_NODE, NULL, NULL);
-  ASSERT_EQ(status.major, 0);
+	/* Remove node created while running test */
+	status = fsal_remove(sub_hdl, TEST_NODE, NULL, NULL);
+	ASSERT_EQ(status.major, 0);
 }
 
 TEST_F(MknodeEmptyLatencyTest, LOOP)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = test_root->obj_ops->mknode(test_root, fname, SOCKET_FILE, &attrs,
-               &obj, NULL, nullptr, nullptr);
-    EXPECT_EQ(status.major, 0);
-    obj->obj_ops->put_ref(obj);
-  }
+		status = test_root->obj_ops->mknode(test_root, fname,
+						    SOCKET_FILE, &attrs, &obj,
+						    NULL, nullptr, nullptr);
+		EXPECT_EQ(status.major, 0);
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per mknode: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per mknode: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove nodes created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove nodes created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-  }
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 TEST_F(MknodeEmptyLatencyTest, FSALCREATE)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_create(test_root, fname, SOCKET_FILE, &attrs, NULL, &obj,
-               NULL, nullptr, nullptr);
-    EXPECT_EQ(status.major, 0);
-    obj->obj_ops->put_ref(obj);
-  }
+		status = fsal_create(test_root, fname, SOCKET_FILE, &attrs,
+				     NULL, &obj, NULL, nullptr, nullptr);
+		EXPECT_EQ(status.major, 0);
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per fsal_create: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per fsal_create: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove nodes created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove nodes created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-   }
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 TEST_F(MknodeFullLatencyTest, BIG)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = test_root->obj_ops->mknode(test_root, fname, SOCKET_FILE, &attrs,
-               &obj, NULL, nullptr, nullptr);
-    ASSERT_EQ(status.major, 0) << " failed to mknnode " << fname;
-    obj->obj_ops->put_ref(obj);
-  }
+		status = test_root->obj_ops->mknode(test_root, fname,
+						    SOCKET_FILE, &attrs, &obj,
+						    NULL, nullptr, nullptr);
+		ASSERT_EQ(status.major, 0) << " failed to mknnode " << fname;
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per mknode: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per mknode: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove nodes created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove nodes created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-  }
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 TEST_F(MknodeFullLatencyTest, BIG_BYPASS)
 {
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct fsal_obj_handle *sub_hdl;
-  struct fsal_obj_handle *obj;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct fsal_obj_handle *sub_hdl;
+	struct fsal_obj_handle *obj;
+	struct timespec s_time, e_time;
 
-  sub_hdl = mdcdb_get_sub_handle(test_root);
-  ASSERT_NE(sub_hdl, nullptr);
+	sub_hdl = mdcdb_get_sub_handle(test_root);
+	ASSERT_NE(sub_hdl, nullptr);
 
-  status = nfs_export_get_root_entry(a_export, &sub_hdl);
-  ASSERT_EQ(status.major, 0);
+	status = nfs_export_get_root_entry(a_export, &sub_hdl);
+	ASSERT_EQ(status.major, 0);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = sub_hdl->obj_ops->mknode(sub_hdl, fname, SOCKET_FILE, &attrs, &obj,
-               NULL, nullptr, nullptr);
-    ASSERT_EQ(status.major, 0) << " failed to mknode " << fname;
-    obj->obj_ops->put_ref(obj);
-  }
+		status = sub_hdl->obj_ops->mknode(sub_hdl, fname, SOCKET_FILE,
+						  &attrs, &obj, NULL, nullptr,
+						  nullptr);
+		ASSERT_EQ(status.major, 0) << " failed to mknode " << fname;
+		obj->obj_ops->put_ref(obj);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per mknode: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per mknode: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove nodes created while running test */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    sprintf(fname, "d-%08x", i);
+	/* Remove nodes created while running test */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		sprintf(fname, "d-%08x", i);
 
-    status = fsal_remove(sub_hdl, fname, NULL, NULL);
-    ASSERT_EQ(status.major, 0);
-  }
+		status = fsal_remove(sub_hdl, fname, NULL, NULL);
+		ASSERT_EQ(status.major, 0);
+	}
 }
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
-  char* session_name = NULL;
+	int code = 0;
+	char *session_name = NULL;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
+		opts.add_options()("session", po::value<string>(),
+				   "LTTng session name");
+		opts.add_options()("event-list", po::value<string>(),
+				   "LTTng event list, comma separated");
+		opts.add_options()("profile", po::value<string>(),
+				   "Enable profiling and set output file.");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-       "path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::command_line_parser parser{ argc, argv };
+		parser.options(opts).allow_unregistered();
+		po::store(parser.run(), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-       "log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
+		vm_iter = vm.find("session");
+		if (vm_iter != vm.end()) {
+			session_name = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("event-list");
+		if (vm_iter != vm.end()) {
+			event_list = (char *)vm_iter->second.as<std::string>()
+					     .c_str();
+		}
+		vm_iter = vm.find("profile");
+		if (vm_iter != vm.end()) {
+			profile_out = (char *)vm_iter->second.as<std::string>()
+					      .c_str();
+		}
 
-      ("export", po::value<uint16_t>(),
-       "id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
+		gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
+						    session_name, TEST_ROOT,
+						    export_id);
+		::testing::AddGlobalTestEnvironment(gtest::env);
 
-      ("debug", po::value<string>(),
-       "ganesha debug level")
+		code = RUN_ALL_TESTS();
+	}
 
-      ("session", po::value<string>(),
-	"LTTng session name")
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-      ("event-list", po::value<string>(),
-	"LTTng event list, comma separated")
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-      ("profile", po::value<string>(),
-	"Enable profiling and set output file.")
-      ;
-
-    po::variables_map::iterator vm_iter;
-    po::command_line_parser parser{argc, argv};
-    parser.options(opts).allow_unregistered();
-    po::store(parser.run(), vm);
-    po::notify(vm);
-
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-	(char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
-    vm_iter = vm.find("session");
-    if (vm_iter != vm.end()) {
-      session_name = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("event-list");
-    if (vm_iter != vm.end()) {
-      event_list = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("profile");
-    if (vm_iter != vm.end()) {
-      profile_out = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-
-    ::testing::InitGoogleTest(&argc, argv);
-    gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
-					session_name, TEST_ROOT, export_id);
-    ::testing::AddGlobalTestEnvironment(gtest::env);
-
-    code  = RUN_ALL_TESTS();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }

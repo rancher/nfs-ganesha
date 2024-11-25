@@ -56,361 +56,357 @@ void admin_halt(void);
 #define OFFSET 0
 #define LENGTH 10
 
-namespace {
+namespace
+{
 
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
-  char* event_list = nullptr;
-  char* profile_out = nullptr;
-  pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-  pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+char *ganesha_conf = nullptr;
+char *lpath = nullptr;
+int dlevel = -1;
+uint16_t export_id = 77;
+char *event_list = nullptr;
+char *profile_out = nullptr;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
-  class Commit2EmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
-  protected:
+class Commit2EmptyLatencyTest : public gtest::GaneshaFSALBaseTest {
+    protected:
+	virtual void SetUp()
+	{
+		fsal_status_t status;
+		bool caller_perm_check = false;
 
-    virtual void SetUp() {
-      fsal_status_t status;
-      bool caller_perm_check = false;
+		gtest::GaneshaFSALBaseTest::SetUp();
 
-      gtest::GaneshaFSALBaseTest::SetUp();
+		test_file_state = op_ctx->fsal_export->exp_ops.alloc_state(
+			op_ctx->fsal_export, STATE_TYPE_SHARE, NULL);
+		ASSERT_NE(test_file_state, nullptr);
 
-      test_file_state = op_ctx->fsal_export->exp_ops.alloc_state(
-						op_ctx->fsal_export,
-						STATE_TYPE_SHARE,
-						NULL);
-      ASSERT_NE(test_file_state, nullptr);
+		status = test_root->obj_ops->open2(
+			test_root, test_file_state, FSAL_O_RDWR, FSAL_UNCHECKED,
+			TEST_FILE, NULL, NULL, &test_file, NULL,
+			&caller_perm_check, nullptr, nullptr);
+		ASSERT_EQ(status.major, 0);
+	}
 
-      status = test_root->obj_ops->open2(test_root, test_file_state,
-                      FSAL_O_RDWR, FSAL_UNCHECKED, TEST_FILE, NULL, NULL,
-                      &test_file, NULL, &caller_perm_check, nullptr, nullptr);
-      ASSERT_EQ(status.major, 0);
-    }
+	virtual void TearDown()
+	{
+		fsal_status_t status;
 
-    virtual void TearDown() {
-      fsal_status_t status;
+		status = test_file->obj_ops->close2(test_file, test_file_state);
+		EXPECT_EQ(0, status.major);
 
-      status = test_file->obj_ops->close2(test_file, test_file_state);
-      EXPECT_EQ(0, status.major);
+		free_state(test_file_state);
+		EXPECT_EQ(0, status.major);
 
-      free_state(test_file_state);
-      EXPECT_EQ(0, status.major);
+		status = fsal_remove(test_root, TEST_FILE, NULL, NULL);
+		EXPECT_EQ(status.major, 0);
+		test_file->obj_ops->put_ref(test_file);
+		test_file = NULL;
 
-      status = fsal_remove(test_root, TEST_FILE, NULL, NULL);
-      EXPECT_EQ(status.major, 0);
-      test_file->obj_ops->put_ref(test_file);
-      test_file = NULL;
+		gtest::GaneshaFSALBaseTest::TearDown();
+	}
 
-      gtest::GaneshaFSALBaseTest::TearDown();
-    }
-
-    struct fsal_obj_handle *test_file = nullptr;
-    struct state_t* test_file_state = nullptr;
-  };
+	struct fsal_obj_handle *test_file = nullptr;
+	struct state_t *test_file_state = nullptr;
+};
 
 } /* namespace */
 
 TEST_F(Commit2EmptyLatencyTest, SIMPLE)
 {
-  fsal_status_t status;
+	fsal_status_t status;
 
-  status = test_file->obj_ops->commit2(test_file, OFFSET, LENGTH);
-  EXPECT_EQ(status.major, 0);
+	status = test_file->obj_ops->commit2(test_file, OFFSET, LENGTH);
+	EXPECT_EQ(status.major, 0);
 }
 
 TEST_F(Commit2EmptyLatencyTest, SIMPLE_BYPASS)
 {
-  fsal_status_t status;
-  struct fsal_obj_handle *sub_hdl;
+	fsal_status_t status;
+	struct fsal_obj_handle *sub_hdl;
 
-  sub_hdl = mdcdb_get_sub_handle(test_file);
-  ASSERT_NE(sub_hdl, nullptr);
+	sub_hdl = mdcdb_get_sub_handle(test_file);
+	ASSERT_NE(sub_hdl, nullptr);
 
-  status = sub_hdl->obj_ops->commit2(sub_hdl, OFFSET, LENGTH);
-  EXPECT_EQ(status.major, 0);
+	status = sub_hdl->obj_ops->commit2(sub_hdl, OFFSET, LENGTH);
+	EXPECT_EQ(status.major, 0);
 }
 
 TEST_F(Commit2EmptyLatencyTest, SMALL_UNSTABLE_WRITE)
 {
-  fsal_status_t status;
-  char *databuffer;
-  struct fsal_io_arg *write_arg = (struct fsal_io_arg *)
-  				  alloca(sizeof(*write_arg) +
-				  sizeof(struct iovec));
-  struct async_process_data write_data;
-  int bytes = 64;
-  databuffer = (char *) malloc(bytes);
+	fsal_status_t status;
+	char *databuffer;
+	struct fsal_io_arg *write_arg = (struct fsal_io_arg *)alloca(
+		sizeof(*write_arg) + sizeof(struct iovec));
+	struct async_process_data write_data;
+	int bytes = 64;
+	databuffer = (char *)malloc(bytes);
 
-  memset(databuffer, 'a', bytes);
+	memset(databuffer, 'a', bytes);
 
-  write_arg->info = NULL;
-  write_arg->state = NULL;
-  write_arg->offset = 0;
-  write_arg->io_request = bytes;
-  write_arg->iov_count = 1;
-  write_arg->iov[0].iov_len = bytes;
-  write_arg->iov[0].iov_base = databuffer;
-  write_arg->io_amount = 0;
-  write_arg->fsal_stable = false;
+	write_arg->info = NULL;
+	write_arg->state = NULL;
+	write_arg->offset = 0;
+	write_arg->io_request = bytes;
+	write_arg->iov_count = 1;
+	write_arg->iov[0].iov_len = bytes;
+	write_arg->iov[0].iov_base = databuffer;
+	write_arg->io_amount = 0;
+	write_arg->fsal_stable = false;
 
-  write_data.ret.major = ERR_FSAL_NO_ERROR;
-  write_data.ret.minor = 0;
-  write_data.done = false;
-  write_data.fsa_cond = &cond;
-  write_data.fsa_mutex = &mutex;
+	write_data.ret.major = ERR_FSAL_NO_ERROR;
+	write_data.ret.minor = 0;
+	write_data.done = false;
+	write_data.fsa_cond = &cond;
+	write_data.fsa_mutex = &mutex;
 
-  fsal_write(test_file, true, write_arg, &write_data);
+	fsal_write(test_file, true, write_arg, &write_data);
 
-  EXPECT_EQ(write_data.ret.major, 0);
+	EXPECT_EQ(write_data.ret.major, 0);
 
-  status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
-  EXPECT_EQ(status.major, 0);
+	status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
+	EXPECT_EQ(status.major, 0);
 
-  free(databuffer);
+	free(databuffer);
 }
 
 TEST_F(Commit2EmptyLatencyTest, SMALL_STABLE_WRITE)
 {
-  fsal_status_t status;
-  char *databuffer;
-  struct fsal_io_arg *write_arg = (struct fsal_io_arg *)
-  				  alloca(sizeof(*write_arg) +
-				  sizeof(struct iovec));
-  struct async_process_data write_data;
-  int bytes = 64;
-  databuffer = (char *) malloc(bytes);
+	fsal_status_t status;
+	char *databuffer;
+	struct fsal_io_arg *write_arg = (struct fsal_io_arg *)alloca(
+		sizeof(*write_arg) + sizeof(struct iovec));
+	struct async_process_data write_data;
+	int bytes = 64;
+	databuffer = (char *)malloc(bytes);
 
-  memset(databuffer, 'a', bytes);
+	memset(databuffer, 'a', bytes);
 
-  write_arg->info = NULL;
-  write_arg->state = NULL;
-  write_arg->offset = 0;
-  write_arg->io_request = bytes;
-  write_arg->iov_count = 1;
-  write_arg->iov[0].iov_len = bytes;
-  write_arg->iov[0].iov_base = databuffer;
-  write_arg->io_amount = 0;
-  write_arg->fsal_stable = true;
+	write_arg->info = NULL;
+	write_arg->state = NULL;
+	write_arg->offset = 0;
+	write_arg->io_request = bytes;
+	write_arg->iov_count = 1;
+	write_arg->iov[0].iov_len = bytes;
+	write_arg->iov[0].iov_base = databuffer;
+	write_arg->io_amount = 0;
+	write_arg->fsal_stable = true;
 
-  write_data.ret.major = ERR_FSAL_NO_ERROR;
-  write_data.ret.minor = 0;
-  write_data.done = false;
-  write_data.fsa_cond = &cond;
-  write_data.fsa_mutex = &mutex;
+	write_data.ret.major = ERR_FSAL_NO_ERROR;
+	write_data.ret.minor = 0;
+	write_data.done = false;
+	write_data.fsa_cond = &cond;
+	write_data.fsa_mutex = &mutex;
 
-  fsal_write(test_file, true, write_arg, &write_data);
+	fsal_write(test_file, true, write_arg, &write_data);
 
-  EXPECT_EQ(write_data.ret.major, 0);
+	EXPECT_EQ(write_data.ret.major, 0);
 
-  status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
-  EXPECT_EQ(status.major, 0);
+	status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
+	EXPECT_EQ(status.major, 0);
 
-  free(databuffer);
+	free(databuffer);
 }
 
 TEST_F(Commit2EmptyLatencyTest, LARGE_UNSTABLE_WRITE)
 {
-  fsal_status_t status;
-  char *databuffer;
-  struct fsal_io_arg *write_arg = (struct fsal_io_arg *)
-  				  alloca(sizeof(*write_arg) +
-				  sizeof(struct iovec));
-  struct async_process_data write_data;
-  int bytes = (2*1024*1024);
-  databuffer = (char *) malloc(bytes);
+	fsal_status_t status;
+	char *databuffer;
+	struct fsal_io_arg *write_arg = (struct fsal_io_arg *)alloca(
+		sizeof(*write_arg) + sizeof(struct iovec));
+	struct async_process_data write_data;
+	int bytes = (2 * 1024 * 1024);
+	databuffer = (char *)malloc(bytes);
 
-  memset(databuffer, 'a', bytes);
+	memset(databuffer, 'a', bytes);
 
-  write_arg->info = NULL;
-  write_arg->state = NULL;
-  write_arg->offset = 0;
-  write_arg->io_request = bytes;
-  write_arg->iov_count = 1;
-  write_arg->iov[0].iov_len = bytes;
-  write_arg->iov[0].iov_base = databuffer;
-  write_arg->io_amount = 0;
-  write_arg->fsal_stable = false;
+	write_arg->info = NULL;
+	write_arg->state = NULL;
+	write_arg->offset = 0;
+	write_arg->io_request = bytes;
+	write_arg->iov_count = 1;
+	write_arg->iov[0].iov_len = bytes;
+	write_arg->iov[0].iov_base = databuffer;
+	write_arg->io_amount = 0;
+	write_arg->fsal_stable = false;
 
-  write_data.ret.major = ERR_FSAL_NO_ERROR;
-  write_data.ret.minor = 0;
-  write_data.done = false;
-  write_data.fsa_cond = &cond;
-  write_data.fsa_mutex = &mutex;
+	write_data.ret.major = ERR_FSAL_NO_ERROR;
+	write_data.ret.minor = 0;
+	write_data.done = false;
+	write_data.fsa_cond = &cond;
+	write_data.fsa_mutex = &mutex;
 
-  fsal_write(test_file, true, write_arg, &write_data);
+	fsal_write(test_file, true, write_arg, &write_data);
 
-  EXPECT_EQ(write_data.ret.major, 0);
+	EXPECT_EQ(write_data.ret.major, 0);
 
-  status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
-  EXPECT_EQ(status.major, 0);
+	status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
+	EXPECT_EQ(status.major, 0);
 
-  free(databuffer);
+	free(databuffer);
 }
 
 TEST_F(Commit2EmptyLatencyTest, LARGE_STABLE_WRITE)
 {
-  fsal_status_t status;
-  char *databuffer;
-  struct fsal_io_arg *write_arg = (struct fsal_io_arg *)
-  				  alloca(sizeof(*write_arg) +
-				  sizeof(struct iovec));
-  struct async_process_data write_data;
-  int bytes = (2*1024*1024);
-  databuffer = (char *) malloc(bytes);
+	fsal_status_t status;
+	char *databuffer;
+	struct fsal_io_arg *write_arg = (struct fsal_io_arg *)alloca(
+		sizeof(*write_arg) + sizeof(struct iovec));
+	struct async_process_data write_data;
+	int bytes = (2 * 1024 * 1024);
+	databuffer = (char *)malloc(bytes);
 
-  memset(databuffer, 'a', bytes);
+	memset(databuffer, 'a', bytes);
 
-  write_arg->info = NULL;
-  write_arg->state = NULL;
-  write_arg->offset = 0;
-  write_arg->io_request = bytes;
-  write_arg->iov_count = 1;
-  write_arg->iov[0].iov_len = bytes;
-  write_arg->iov[0].iov_base = databuffer;
-  write_arg->io_amount = 0;
-  write_arg->fsal_stable = true;
+	write_arg->info = NULL;
+	write_arg->state = NULL;
+	write_arg->offset = 0;
+	write_arg->io_request = bytes;
+	write_arg->iov_count = 1;
+	write_arg->iov[0].iov_len = bytes;
+	write_arg->iov[0].iov_base = databuffer;
+	write_arg->io_amount = 0;
+	write_arg->fsal_stable = true;
 
-  write_data.ret.major = ERR_FSAL_NO_ERROR;
-  write_data.ret.minor = 0;
-  write_data.done = false;
-  write_data.fsa_cond = &cond;
-  write_data.fsa_mutex = &mutex;
+	write_data.ret.major = ERR_FSAL_NO_ERROR;
+	write_data.ret.minor = 0;
+	write_data.done = false;
+	write_data.fsa_cond = &cond;
+	write_data.fsa_mutex = &mutex;
 
-  fsal_write(test_file, true, write_arg, &write_data);
+	fsal_write(test_file, true, write_arg, &write_data);
 
-  EXPECT_EQ(write_data.ret.major, 0);
+	EXPECT_EQ(write_data.ret.major, 0);
 
-  status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
-  EXPECT_EQ(status.major, 0);
+	status = test_file->obj_ops->commit2(test_file, OFFSET, bytes);
+	EXPECT_EQ(status.major, 0);
 
-  free(databuffer);
+	free(databuffer);
 }
 
 TEST_F(Commit2EmptyLatencyTest, LOOP)
 {
-  fsal_status_t status;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    status = test_file->obj_ops->commit2(test_file, OFFSET, LENGTH);
-    ASSERT_EQ(status.major, 0);
-  }
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		status = test_file->obj_ops->commit2(test_file, OFFSET, LENGTH);
+		ASSERT_EQ(status.major, 0);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per commit2: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per commit2: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 }
 
 TEST_F(Commit2EmptyLatencyTest, FSAL_COMMIT)
 {
-  fsal_status_t status;
-  struct timespec s_time, e_time;
+	fsal_status_t status;
+	struct timespec s_time, e_time;
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    status = fsal_commit(test_file, OFFSET, LENGTH);
-    ASSERT_EQ(status.major, 0);
-  }
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		status = fsal_commit(test_file, OFFSET, LENGTH);
+		ASSERT_EQ(status.major, 0);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  fprintf(stderr, "Average time per fsal_commit: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per fsal_commit: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 }
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
-  char* session_name = NULL;
+	int code = 0;
+	char *session_name = NULL;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
+		opts.add_options()("session", po::value<string>(),
+				   "LTTng session name");
+		opts.add_options()("event-list", po::value<string>(),
+				   "LTTng event list, comma separated");
+		opts.add_options()("profile", po::value<string>(),
+				   "Enable profiling and set output file.");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-       "path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::command_line_parser parser{ argc, argv };
+		parser.options(opts).allow_unregistered();
+		po::store(parser.run(), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-       "log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
+		vm_iter = vm.find("session");
+		if (vm_iter != vm.end()) {
+			session_name = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("event-list");
+		if (vm_iter != vm.end()) {
+			event_list = (char *)vm_iter->second.as<std::string>()
+					     .c_str();
+		}
+		vm_iter = vm.find("profile");
+		if (vm_iter != vm.end()) {
+			profile_out = (char *)vm_iter->second.as<std::string>()
+					      .c_str();
+		}
 
-      ("export", po::value<uint16_t>(),
-       "id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
+		gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
+						    session_name, TEST_ROOT,
+						    export_id);
+		::testing::AddGlobalTestEnvironment(gtest::env);
 
-      ("debug", po::value<string>(),
-       "ganesha debug level")
+		code = RUN_ALL_TESTS();
+	}
 
-      ("session", po::value<string>(),
-	"LTTng session name")
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-      ("event-list", po::value<string>(),
-	"LTTng event list, comma separated")
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-      ("profile", po::value<string>(),
-	"Enable profiling and set output file.")
-      ;
-
-    po::variables_map::iterator vm_iter;
-    po::command_line_parser parser{argc, argv};
-    parser.options(opts).allow_unregistered();
-    po::store(parser.run(), vm);
-    po::notify(vm);
-
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-	(char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
-    vm_iter = vm.find("session");
-    if (vm_iter != vm.end()) {
-      session_name = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("event-list");
-    if (vm_iter != vm.end()) {
-      event_list = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("profile");
-    if (vm_iter != vm.end()) {
-      profile_out = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-
-    ::testing::InitGoogleTest(&argc, argv);
-    gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
-					session_name, TEST_ROOT, export_id);
-    ::testing::AddGlobalTestEnvironment(gtest::env);
-
-    code  = RUN_ALL_TESTS();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }

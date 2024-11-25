@@ -50,206 +50,206 @@ void admin_halt(void);
 #define DIR_COUNT 100000
 #define LOOP_COUNT 1000000
 
-namespace {
+namespace
+{
 
-  char* event_list = nullptr;
-  char* profile_out = nullptr;
+char *event_list = nullptr;
+char *profile_out = nullptr;
 
-  class LinkFullLatencyTest : public gtest::GaeshaNFS4BaseTest {
+class LinkFullLatencyTest : public gtest::GaeshaNFS4BaseTest {
+    protected:
+	virtual void SetUp()
+	{
+		GaeshaNFS4BaseTest::SetUp();
 
-  protected:
+		create_and_prime_many(DIR_COUNT, objs);
 
-    virtual void SetUp() {
-      GaeshaNFS4BaseTest::SetUp();
+		set_saved_export();
+	}
 
-      create_and_prime_many(DIR_COUNT, objs);
+	virtual void TearDown()
+	{
+		remove_many(DIR_COUNT, objs);
 
-      set_saved_export();
-    }
+		GaeshaNFS4BaseTest::TearDown();
+	}
 
-    virtual void TearDown() {
-      remove_many(DIR_COUNT, objs);
-
-      GaeshaNFS4BaseTest::TearDown();
-    }
-
-    struct fsal_obj_handle *objs[DIR_COUNT];
-  };
+	struct fsal_obj_handle *objs[DIR_COUNT];
+};
 
 } /* namespace */
 
 TEST_F(LinkFullLatencyTest, BIG_SINGLE)
 {
-  int rc;
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct timespec s_time, e_time;
+	int rc;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct timespec s_time, e_time;
 
-  enableEvents(event_list);
+	enableEvents(event_list);
 
-  now(&s_time);
+	now(&s_time);
 
-  sprintf(fname, "d-%08x-%08x", DIR_COUNT / 5, 1);
+	sprintf(fname, "d-%08x-%08x", DIR_COUNT / 5, 1);
 
-  setup_link(0, fname);
+	setup_link(0, fname);
 
-  setCurrentFH(test_root);
-  setSavedFH(objs[DIR_COUNT / 5]);
-  rc = nfs4_op_link(&ops[0], data, &resp);
-  EXPECT_EQ(rc, NFS4_OK);
+	setCurrentFH(test_root);
+	setSavedFH(objs[DIR_COUNT / 5]);
+	rc = nfs4_op_link(&ops[0], data, &resp);
+	EXPECT_EQ(rc, NFS4_OK);
 
-  now(&e_time);
+	now(&e_time);
 
-  disableEvents(event_list);
+	disableEvents(event_list);
 
-  fprintf(stderr, "Average time per link: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time));
+	fprintf(stderr, "Average time per link: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time));
 
-  /* Remove the created link */
-  status = fsal_remove(test_root, fname, NULL, NULL);
-  EXPECT_EQ(status.major, 0);
+	/* Remove the created link */
+	status = fsal_remove(test_root, fname, NULL, NULL);
+	EXPECT_EQ(status.major, 0);
 }
 
 TEST_F(LinkFullLatencyTest, BIG)
 {
-  int rc;
-  fsal_status_t status;
-  char fname[NAMELEN];
-  struct timespec s_time, e_time;
+	int rc;
+	fsal_status_t status;
+	char fname[NAMELEN];
+	struct timespec s_time, e_time;
 
-  enableEvents(event_list);
-  if (profile_out)
-    ProfilerStart(profile_out);
+	enableEvents(event_list);
+	if (profile_out)
+		ProfilerStart(profile_out);
 
-  now(&s_time);
+	now(&s_time);
 
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    int n = i % DIR_COUNT;
-    int r = i / DIR_COUNT;
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		int n = i % DIR_COUNT;
+		int r = i / DIR_COUNT;
 
-    sprintf(fname, "d-%08x-%08x", n, r + 1);
+		sprintf(fname, "d-%08x-%08x", n, r + 1);
 
-    setup_link(0, fname);
+		setup_link(0, fname);
 
-    setCurrentFH(test_root);
-    setSavedFH(objs[n]);
-    rc = nfs4_op_link(&ops[0], data, &resp);
-    EXPECT_EQ(rc, NFS4_OK);
-    cleanup_link(0);
-  }
+		setCurrentFH(test_root);
+		setSavedFH(objs[n]);
+		rc = nfs4_op_link(&ops[0], data, &resp);
+		EXPECT_EQ(rc, NFS4_OK);
+		cleanup_link(0);
+	}
 
-  now(&e_time);
+	now(&e_time);
 
-  if (profile_out)
-    ProfilerStop();
-  disableEvents(event_list);
+	if (profile_out)
+		ProfilerStop();
+	disableEvents(event_list);
 
-  fprintf(stderr, "Average time per link: %" PRIu64 " ns\n",
-          timespec_diff(&s_time, &e_time) / LOOP_COUNT);
+	fprintf(stderr, "Average time per link: %" PRIu64 " ns\n",
+		timespec_diff(&s_time, &e_time) / LOOP_COUNT);
 
-  /* Remove the created links */
-  for (int i = 0; i < LOOP_COUNT; ++i) {
-    int n = i % DIR_COUNT;
-    int r = i / DIR_COUNT;
+	/* Remove the created links */
+	for (int i = 0; i < LOOP_COUNT; ++i) {
+		int n = i % DIR_COUNT;
+		int r = i / DIR_COUNT;
 
-    sprintf(fname, "d-%08x-%08x", n, r + 1);
-    status = fsal_remove(test_root, fname, NULL, NULL);
-    EXPECT_EQ(status.major, 0);
-  }
+		sprintf(fname, "d-%08x-%08x", n, r + 1);
+		status = fsal_remove(test_root, fname, NULL, NULL);
+		EXPECT_EQ(status.major, 0);
+	}
 }
 
 int main(int argc, char *argv[])
 {
-  int code = 0;
-  char* session_name = NULL;
-  char* ganesha_conf = nullptr;
-  char* lpath = nullptr;
-  int dlevel = -1;
-  uint16_t export_id = 77;
+	int code = 0;
+	char *session_name = NULL;
+	char *ganesha_conf = nullptr;
+	char *lpath = nullptr;
+	int dlevel = -1;
+	uint16_t export_id = 77;
 
-  using namespace std;
-  namespace po = boost::program_options;
+	using namespace std;
+	namespace po = boost::program_options;
 
-  po::options_description opts("program options");
-  po::variables_map vm;
+	po::options_description opts("program options");
+	po::variables_map vm;
 
-  try {
+	try {
+		opts.add_options()("config", po::value<string>(),
+				   "path to Ganesha conf file");
+		opts.add_options()("logfile", po::value<string>(),
+				   "log to the provided file path");
+		opts.add_options()(
+			"export", po::value<uint16_t>(),
+			"id of export on which to operate (must exist)");
+		opts.add_options()("debug", po::value<string>(),
+				   "ganesha debug level");
+		opts.add_options()("session", po::value<string>(),
+				   "LTTng session name");
+		opts.add_options()("event-list", po::value<string>(),
+				   "LTTng event list, comma separated");
+		opts.add_options()("profile", po::value<string>(),
+				   "Enable profiling and set output file.");
 
-    opts.add_options()
-      ("config", po::value<string>(),
-       "path to Ganesha conf file")
+		po::variables_map::iterator vm_iter;
+		po::command_line_parser parser{ argc, argv };
+		parser.options(opts).allow_unregistered();
+		po::store(parser.run(), vm);
+		po::notify(vm);
 
-      ("logfile", po::value<string>(),
-       "log to the provided file path")
+		// use config vars--leaves them on the stack
+		vm_iter = vm.find("config");
+		if (vm_iter != vm.end()) {
+			ganesha_conf = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("logfile");
+		if (vm_iter != vm.end()) {
+			lpath = (char *)vm_iter->second.as<std::string>()
+					.c_str();
+		}
+		vm_iter = vm.find("debug");
+		if (vm_iter != vm.end()) {
+			dlevel = ReturnLevelAscii(
+				(char *)vm_iter->second.as<std::string>()
+					.c_str());
+		}
+		vm_iter = vm.find("export");
+		if (vm_iter != vm.end()) {
+			export_id = vm_iter->second.as<uint16_t>();
+		}
+		vm_iter = vm.find("session");
+		if (vm_iter != vm.end()) {
+			session_name = (char *)vm_iter->second.as<std::string>()
+					       .c_str();
+		}
+		vm_iter = vm.find("event-list");
+		if (vm_iter != vm.end()) {
+			event_list = (char *)vm_iter->second.as<std::string>()
+					     .c_str();
+		}
+		vm_iter = vm.find("profile");
+		if (vm_iter != vm.end()) {
+			profile_out = (char *)vm_iter->second.as<std::string>()
+					      .c_str();
+		}
 
-      ("export", po::value<uint16_t>(),
-       "id of export on which to operate (must exist)")
+		::testing::InitGoogleTest(&argc, argv);
+		gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
+						    session_name, TEST_ROOT,
+						    export_id);
+		::testing::AddGlobalTestEnvironment(gtest::env);
 
-      ("debug", po::value<string>(),
-       "ganesha debug level")
+		code = RUN_ALL_TESTS();
+	}
 
-      ("session", po::value<string>(),
-       "LTTng session name")
+	catch (po::error &e) {
+		cout << "Error parsing opts " << e.what() << endl;
+	}
 
-      ("event-list", po::value<string>(),
-       "LTTng event list, comma separated")
+	catch (...) {
+		cout << "Unhandled exception in main()" << endl;
+	}
 
-      ("profile", po::value<string>(),
-       "Enable profiling and set output file.")
-      ;
-
-    po::variables_map::iterator vm_iter;
-    po::command_line_parser parser{argc, argv};
-    parser.options(opts).allow_unregistered();
-    po::store(parser.run(), vm);
-    po::notify(vm);
-
-    // use config vars--leaves them on the stack
-    vm_iter = vm.find("config");
-    if (vm_iter != vm.end()) {
-      ganesha_conf = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("logfile");
-    if (vm_iter != vm.end()) {
-      lpath = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("debug");
-    if (vm_iter != vm.end()) {
-      dlevel = ReturnLevelAscii(
-         (char*) vm_iter->second.as<std::string>().c_str());
-    }
-    vm_iter = vm.find("export");
-    if (vm_iter != vm.end()) {
-      export_id = vm_iter->second.as<uint16_t>();
-    }
-    vm_iter = vm.find("session");
-    if (vm_iter != vm.end()) {
-      session_name = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("event-list");
-    if (vm_iter != vm.end()) {
-      event_list = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-    vm_iter = vm.find("profile");
-    if (vm_iter != vm.end()) {
-      profile_out = (char*) vm_iter->second.as<std::string>().c_str();
-    }
-
-    ::testing::InitGoogleTest(&argc, argv);
-    gtest::env = new gtest::Environment(ganesha_conf, lpath, dlevel,
-                                        session_name, TEST_ROOT, export_id);
-    ::testing::AddGlobalTestEnvironment(gtest::env);
-
-    code  = RUN_ALL_TESTS();
-  }
-
-  catch(po::error& e) {
-    cout << "Error parsing opts " << e.what() << endl;
-  }
-
-  catch(...) {
-    cout << "Unhandled exception in main()" << endl;
-  }
-
-  return code;
+	return code;
 }
