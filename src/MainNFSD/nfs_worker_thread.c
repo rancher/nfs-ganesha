@@ -68,6 +68,8 @@
 #endif
 #include "gsh_xprt_tracepoint.h"
 
+#include "nfs_metrics.h"
+
 #define NFS_pcp nfs_param.core_param
 #define NFS_options NFS_pcp.core_options
 #define NFS_program NFS_pcp.program
@@ -922,6 +924,8 @@ static enum xprt_stat nfs_rpc_process_request(nfs_request_t *reqdata,
 			 * measure the frequency of occurrence this scenario.
 			 */
 			if (gc->gc_proc == RPCSEC_GSS_DATA) {
+				nfs_metrics__gss_request_dropped();
+
 				LogInfo(COMPONENT_DISPATCH,
 					"Received AUTH_OK for RPCSEC_GSS_DATA procedure with no-dispatch set to true. Destroying connection.");
 				SVC_DESTROY(reqdata->svc.rq_xprt);

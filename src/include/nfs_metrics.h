@@ -36,6 +36,7 @@
 #include "nfs23.h"
 
 void nfs_metrics__nfs4_op_completed(nfs_opnum4, nfsstat4, nsecs_elapsed_t);
+void nfs_metrics__gss_request_dropped(void);
 void nfs_metrics__nfs4_compound_completed(nfsstat4, nsecs_elapsed_t,
 					  int num_ops);
 void nfs_metrics__rpc_received(void);

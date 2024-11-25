@@ -168,6 +168,7 @@ static counter_metric_handle_t nfsv4_op_count[NFS4_OP_LAST_ONE]
 static histogram_metric_handle_t compound_latency_metric[NFSSTAT4_INDEX_LAST];
 /* NFS operations per Compound procedure metric */
 static histogram_metric_handle_t compound_ops_count_metric;
+static counter_metric_handle_t dropped_gss_requests_count;
 
 static enum nfsstat4_index nfsstat4_to_index(nfsstat4 stat)
 {
@@ -220,6 +221,17 @@ static void register_nfsv4_operations_metrics(void)
 	}
 }
 
+static void register_dropped_gss_requests_count_metric(void)
+{
+	const metric_label_t labels[] = {};
+
+	dropped_gss_requests_count = monitoring__register_counter(
+		"nfsv4__dropped_gss_requests_count",
+		METRIC_METADATA("Number of dropped rpcsec_gss requests",
+				METRIC_UNIT_NONE),
+		labels, ARRAY_SIZE(labels));
+}
+
 static void register_compound_operation_metrics(void)
 {
 	const metric_label_t empty_labels[] = {};
@@ -254,6 +266,11 @@ void nfs_metrics__nfs4_op_completed(nfs_opnum4 opcode, nfsstat4 statcode,
 		latency / NS_PER_MSEC);
 	monitoring__counter_inc(
 		nfsv4_op_count[opcode][nfsstat4_to_index(statcode)], 1);
+}
+
+void nfs_metrics__gss_request_dropped(void)
+{
+	monitoring__counter_inc(dropped_gss_requests_count, 1);
 }
 
 void nfs_metrics__nfs4_compound_completed(nfsstat4 statcode,
@@ -331,5 +348,6 @@ void nfs_metrics__init(void)
 {
 	register_rpcs_metrics();
 	register_nfsv4_operations_metrics();
+	register_dropped_gss_requests_count_metric();
 	register_compound_operation_metrics();
 }
