@@ -78,7 +78,7 @@ fsal_errors_t posix2fsal_error(int posix_errorcode)
 		/* connection error */
 #ifdef _AIX_5
 	case ENOCONNECT:
-#elif defined _LINUX
+#elif defined linux
 	case ECONNREFUSED:
 	case ECONNABORTED:
 	case ECONNRESET:
@@ -452,8 +452,8 @@ void posix2fsal_attributes(const struct stat *buffstat,
 	if (FSAL_TEST_MASK(fsalattr->valid_mask, ATTR_CHANGE)) {
 		fsalattr->change =
 			gsh_time_cmp(&fsalattr->mtime, &fsalattr->ctime) > 0 ?
-				timespec_to_nsecs(&fsalattr->mtime) :
-				timespec_to_nsecs(&fsalattr->ctime);
+				      timespec_to_nsecs(&fsalattr->mtime) :
+				      timespec_to_nsecs(&fsalattr->ctime);
 	}
 
 	if (FSAL_TEST_MASK(fsalattr->valid_mask, ATTR_SPACEUSED))

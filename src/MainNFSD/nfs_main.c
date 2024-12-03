@@ -432,7 +432,7 @@ int main(int argc, char *argv[])
 
 	/* Make sure Linux file i/o will return with error
 	 * if file size is exceeded. */
-#ifdef _LINUX
+#ifdef linux
 	signal(SIGXFSZ, SIG_IGN);
 #endif
 

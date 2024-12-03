@@ -125,7 +125,7 @@ int nfs_libmain(const char *ganesha_conf, const char *lpath,
 
 	/* Make sure Linux file i/o will return with error
 	 * if file size is exceeded. */
-#ifdef _LINUX
+#ifdef linux
 	signal(SIGXFSZ, SIG_IGN);
 #endif
 
