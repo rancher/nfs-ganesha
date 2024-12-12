@@ -215,54 +215,33 @@ struct auth_stats {
 #define CLIENT_CONTAINER \
 	"(" TYPE_STRING PROTOCOLS_CONTAINER STATE_STATS_REPLY "(tt))"
 
-#define EXPORTS_REPLY                                            \
-	{                                                        \
-		.name = "exports", .type = "a" EXPORT_CONTAINER, \
-		.direction = "out"                               \
-	}
+#define EXPORTS_REPLY \
+	{ .name = "exports", .type = "a" EXPORT_CONTAINER, .direction = "out" }
 
-#define CLIENTS_REPLY                                            \
-	{                                                        \
-		.name = "clients", .type = "a" CLIENT_CONTAINER, \
-		.direction = "out"                               \
-	}
+#define CLIENTS_REPLY \
+	{ .name = "clients", .type = "a" CLIENT_CONTAINER, .direction = "out" }
 
-#define TOTAL_DESTROYED_CONNECTIONS_REPLY                     \
-	{                                                     \
-		.name = "connections_destroyed", .type = "i", \
-		.direction = "out"                            \
-	}
+#define TOTAL_DESTROYED_CONNECTIONS_REPLY \
+	{ .name = "connections_destroyed", .type = "i", .direction = "out" }
 
 /* Bits for introspect arg structures
  */
 
-#define EXPORT_ID_ARG                                            \
-	{                                                        \
-		.name = "exp_id", .type = "q", .direction = "in" \
-	}
+#define EXPORT_ID_ARG { .name = "exp_id", .type = "q", .direction = "in" }
 
-#define TIMESTAMP_REPLY                                            \
-	{                                                          \
-		.name = "time", .type = "(tt)", .direction = "out" \
-	}
+#define TIMESTAMP_REPLY { .name = "time", .type = "(tt)", .direction = "out" }
 
-#define IOSTATS_REPLY                                                   \
-	{ .name = "read", .type = "(tttttt)", .direction = "out" },     \
-	{                                                               \
-		.name = "write", .type = "(tttttt)", .direction = "out" \
-	}
+#define IOSTATS_REPLY                                               \
+	{ .name = "read", .type = "(tttttt)", .direction = "out" }, \
+		{ .name = "write", .type = "(tttttt)", .direction = "out" }
 
 #define CEIOSTATS_REPLY                                                    \
 	{ .name = "read", .type = "(ttdt)", .direction = "out" },          \
 		{ .name = "write", .type = "(ttdt)", .direction = "out" }, \
-	{                                                                  \
-		.name = "other", .type = "(ttd)", .direction = "out"       \
-	}
+		{ .name = "other", .type = "(ttd)", .direction = "out" }
 
-#define CELOSTATS_REPLY                                               \
-	{                                                             \
-		.name = "layout", .type = "(ttt)", .direction = "out" \
-	}
+#define CELOSTATS_REPLY \
+	{ .name = "layout", .type = "(ttt)", .direction = "out" }
 
 #ifdef _USE_NFS3
 #define CE_STATS_REPLY                                                   \
@@ -286,24 +265,17 @@ struct auth_stats {
 #endif
 
 #ifdef _USE_NFS3
-#define CLNT_V3NLM_OPS_REPLY                                       \
-	{                                                          \
-		.name = "clnt_v3nlm_ops_stats", .type = "a(sttt)", \
-		.direction = "out"                                 \
-	}
+#define CLNT_V3NLM_OPS_REPLY              \
+	{ .name = "clnt_v3nlm_ops_stats", \
+	  .type = "a(sttt)",              \
+	  .direction = "out" }
 #endif
 
-#define CLNT_V4_OPS_REPLY                                      \
-	{                                                      \
-		.name = "clnt_v4_ops_stats", .type = "a(stt)", \
-		.direction = "out"                             \
-	}
+#define CLNT_V4_OPS_REPLY \
+	{ .name = "clnt_v4_ops_stats", .type = "a(stt)", .direction = "out" }
 
-#define CLNT_CMP_OPS_REPLY                                   \
-	{                                                    \
-		.name = "clnt_cmp_ops_stats", .type = "ttt", \
-		.direction = "out"                           \
-	}
+#define CLNT_CMP_OPS_REPLY \
+	{ .name = "clnt_cmp_ops_stats", .type = "ttt", .direction = "out" }
 
 #define TRANSPORT_REPLY                                                    \
 	{ .name = "rx_bytes", .type = "(t)", .direction = "out" },         \
@@ -311,25 +283,20 @@ struct auth_stats {
 		{ .name = "rx_err", .type = "(t)", .direction = "out" },   \
 		{ .name = "tx_bytes", .type = "(t)", .direction = "out" }, \
 		{ .name = "tx_pkt", .type = "(t)", .direction = "out" },   \
-	{                                                                  \
-		.name = "tx_err", .type = "(t)", .direction = "out"        \
-	}
+		{ .name = "tx_err", .type = "(t)", .direction = "out" }
 
-#define TOTAL_OPS_REPLY                                           \
-	{                                                         \
-		.name = "op", .type = "a(st)", .direction = "out" \
-	}
+#define TOTAL_OPS_REPLY { .name = "op", .type = "a(st)", .direction = "out" }
 
 /* We are passing back FSAL name so that ganesha_stats can show it as per
  * the FSAL name
  * The fsal_stats is an array with below items in it
  * OP_NAME, NUMBER_OF_OP, AVG_RES_TIME, MIN_RES_TIME & MAX_RES_TIME
  */
-#define FSAL_OPS_REPLY                                                       \
-	{ .name = "fsal_name", .type = "s", .direction = "out" },            \
-	{                                                                    \
-		.name = "fsal_stats", .type = "a(stddd)", .direction = "out" \
-	}
+#define FSAL_OPS_REPLY                                            \
+	{ .name = "fsal_name", .type = "s", .direction = "out" }, \
+		{ .name = "fsal_stats",                           \
+		  .type = "a(stddd)",                             \
+		  .direction = "out" }
 
 #ifdef _USE_NFS3
 #define STATS_STATUS_REPLY                                             \
@@ -346,10 +313,9 @@ struct auth_stats {
 		{ .name = "auth_status",                               \
 		  .type = "b(tt)",                                     \
 		  .direction = "out" },                                \
-	{                                                              \
-		.name = "clnt_allops_status", .type = "b(tt)",         \
-		.direction = "out"                                     \
-	}
+		{ .name = "clnt_allops_status",                        \
+		  .type = "b(tt)",                                     \
+		  .direction = "out" }
 #else
 #define STATS_STATUS_REPLY                                             \
 	{ .name = "nfs_status", .type = "b(tt)", .direction = "out" }, \
@@ -362,30 +328,21 @@ struct auth_stats {
 		{ .name = "auth_status",                               \
 		  .type = "b(tt)",                                     \
 		  .direction = "out" },                                \
-	{                                                              \
-		.name = "clnt_allops_status", .type = "b(tt)",         \
-		.direction = "out"                                     \
-	}
+		{ .name = "clnt_allops_status",                        \
+		  .type = "b(tt)",                                     \
+		  .direction = "out" }
 #endif
 
 #ifdef _USE_NFS3
-#define V3_FULL_REPLY                                          \
-	{                                                      \
-		.name = "v3_full_stats", .type = "a(stttddd)", \
-		.direction = "out"                             \
-	}
+#define V3_FULL_REPLY \
+	{ .name = "v3_full_stats", .type = "a(stttddd)", .direction = "out" }
 #endif
 
-#define V4_FULL_REPLY                                         \
-	{                                                     \
-		.name = "v4_full_stats", .type = "a(sttddd)", \
-		.direction = "out"                            \
-	}
+#define V4_FULL_REPLY \
+	{ .name = "v4_full_stats", .type = "a(sttddd)", .direction = "out" }
 
-#define AUTH_REPLY                                                            \
-	{                                                                     \
-		.name = "auth", .type = "a(tdddtdddtddd)", .direction = "out" \
-	}
+#define AUTH_REPLY \
+	{ .name = "auth", .type = "a(tdddtdddtddd)", .direction = "out" }
 
 #define LAYOUTS_REPLY                                                          \
 	{ .name = "getdevinfo", .type = "(ttt)", .direction = "out" },         \
@@ -396,49 +353,37 @@ struct auth_stats {
 		{ .name = "layout_return",                                     \
 		  .type = "(ttt)",                                             \
 		  .direction = "out" },                                        \
-	{                                                                      \
-		.name = "layout_recall", .type = "(ttt)", .direction = "out"   \
-	}
+		{ .name = "layout_recall",                                     \
+		  .type = "(ttt)",                                             \
+		  .direction = "out" }
 
 /* number of delegations, number of sent recalls,
  * number of failed recalls, number of revokes */
-#define DELEG_REPLY                                           \
-	{                                                     \
-		.name = "delegation_stats", .type = "(tttt)", \
-		.direction = "out"                            \
-	}
+#define DELEG_REPLY \
+	{ .name = "delegation_stats", .type = "(tttt)", .direction = "out" }
 
 #define NFS_ALL_IO_REPLY_ARRAY_TYPE "(qs(tttttt)(tttttt))"
-#define NFS_ALL_IO_REPLY                                                       \
-	{                                                                      \
-		.name = "iostats",                                             \
-		.type = DBUS_TYPE_ARRAY_AS_STRING NFS_ALL_IO_REPLY_ARRAY_TYPE, \
-		.direction = "out"                                             \
-	}
+#define NFS_ALL_IO_REPLY                                                 \
+	{ .name = "iostats",                                             \
+	  .type = DBUS_TYPE_ARRAY_AS_STRING NFS_ALL_IO_REPLY_ARRAY_TYPE, \
+	  .direction = "out" }
 
 #ifdef _USE_9P
-#define _9P_OP_ARG                                                   \
-	{                                                            \
-		.name = "_9p_opname", .type = "s", .direction = "in" \
-	}
+#define _9P_OP_ARG { .name = "_9p_opname", .type = "s", .direction = "in" }
 #endif
 
-#define OP_STATS_REPLY                                                 \
-	{                                                              \
-		.name = "op_stats", .type = "(tt)", .direction = "out" \
-	}
+#define OP_STATS_REPLY \
+	{ .name = "op_stats", .type = "(tt)", .direction = "out" }
 
-#define LRU_UTILIZATION_REPLY                                         \
-	{                                                             \
-		.name = "lru_data_utilization", .type = "stsussstst", \
-		.direction = "out"                                    \
-	}
+#define LRU_UTILIZATION_REPLY             \
+	{ .name = "lru_data_utilization", \
+	  .type = "stsussstst",           \
+	  .direction = "out" }
 
-#define FD_USAGE_SUMM_REPLY                                             \
-	{                                                               \
-		.name = "fd_usage_summary", .type = "sususususssusust", \
-		.direction = "out"                                      \
-	}
+#define FD_USAGE_SUMM_REPLY           \
+	{ .name = "fd_usage_summary", \
+	  .type = "sususususssusust", \
+	  .direction = "out" }
 
 extern struct timespec auth_stats_time;
 #ifdef _USE_NFS3

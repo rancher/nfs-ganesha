@@ -185,13 +185,12 @@ void destroy_fsals(void)
 			atomic_store_int32_t(&m->refcount, 0);
 		}
 		fsal_name = gsh_strdupa(m->name);
-		LogEvent(COMPONENT_FSAL, "Unloading FSAL %s",
-			 fsal_name);
+		LogEvent(COMPONENT_FSAL, "Unloading FSAL %s", fsal_name);
 		rc = m->m_ops.unload(m);
 		if (rc != 0) {
 			LogMajor(COMPONENT_FSAL,
-				 "Unload of %s failed with error %d",
-				 fsal_name, rc);
+				 "Unload of %s failed with error %d", fsal_name,
+				 rc);
 		}
 		LogEvent(COMPONENT_FSAL, "FSAL %s unloaded", fsal_name);
 	}

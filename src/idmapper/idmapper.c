@@ -127,8 +127,8 @@ static bool idmapper_set_owner_domain(void)
 #endif /* USE_NFSIDMAP */
 	if (nfs_param.nfsv4_param.use_getpwnam)
 		strlcpy(domain_addr,
-		       nfs_param.directory_services_param.domainname,
-		       NFS4_MAX_DOMAIN_LEN+1);
+			nfs_param.directory_services_param.domainname,
+			NFS4_MAX_DOMAIN_LEN + 1);
 
 	/* Return false if domain was not initialised through above
 	 * conditions

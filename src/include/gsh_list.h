@@ -63,10 +63,7 @@ typedef int (*glist_compare)(struct glist_head *, struct glist_head *);
  * if the list is empty, it points to itself.
  */
 
-#define GLIST_HEAD_INIT(name)    \
-	{                        \
-		&(name), &(name) \
-	}
+#define GLIST_HEAD_INIT(name) { &(name), &(name) }
 
 #define GLIST_HEAD(name) struct glist_head name = GLIST_HEAD_INIT(name)
 

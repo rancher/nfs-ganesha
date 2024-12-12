@@ -304,8 +304,8 @@ try_drain_self(connection_manager__client_t *client, uint32_t timeout_sec)
 		const int delta = time(NULL) - connection->destroy_start;
 
 		if (delta >
-			nfs_param.core_param.connection_manager_timeout_sec *
-			CONNECTION_MANAGER__DRAIN_MAX_EXPECTED_ITERATIONS) {
+		    nfs_param.core_param.connection_manager_timeout_sec *
+			    CONNECTION_MANAGER__DRAIN_MAX_EXPECTED_ITERATIONS) {
 			LogWarnConnection(connection, "Stuck for %d", delta);
 			return CONNECTION_MANAGER__DRAIN__FAILED_STUCK;
 		}
@@ -367,8 +367,8 @@ connection_manager__drain_and_disconnect_local(sockaddr_t *client_address)
 		wait_for_state_change(client);
 		result = (client->state ==
 			  CONNECTION_MANAGER__CLIENT_STATE__DRAINED) ?
-				       CONNECTION_MANAGER__DRAIN__SUCCESS :
-				       CONNECTION_MANAGER__DRAIN__FAILED;
+				 CONNECTION_MANAGER__DRAIN__SUCCESS :
+				 CONNECTION_MANAGER__DRAIN__FAILED;
 		break;
 	}
 	default: {

@@ -68,69 +68,34 @@
 #define DBUS_PATH "/org/ganesha/nfsd/"
 #define DBUS_ADMIN_IFACE "org.ganesha.nfsd.admin"
 
-#define HEARTBEAT_ARG                                                \
-	{                                                            \
-		.name = "isHealthy", .type = "b", .direction = "out" \
-	}
+#define HEARTBEAT_ARG { .name = "isHealthy", .type = "b", .direction = "out" }
 
-#define STATUS_REPLY                                             \
-	{ .name = "status", .type = "b", .direction = "out" },   \
-	{                                                        \
-		.name = "error", .type = "s", .direction = "out" \
-	}
+#define STATUS_REPLY                                           \
+	{ .name = "status", .type = "b", .direction = "out" }, \
+		{ .name = "error", .type = "s", .direction = "out" }
 
-#define MESSAGE_REPLY                                              \
-	{                                                          \
-		.name = "message", .type = "s", .direction = "out" \
-	}
+#define MESSAGE_REPLY { .name = "message", .type = "s", .direction = "out" }
 
-#define END_ARG_LIST             \
-	{                        \
-		NULL, NULL, NULL \
-	}
+#define END_ARG_LIST { NULL, NULL, NULL }
 
-#define IPADDR_ARG                                               \
-	{                                                        \
-		.name = "ipaddr", .type = "s", .direction = "in" \
-	}
+#define IPADDR_ARG { .name = "ipaddr", .type = "s", .direction = "in" }
 
-#define ID_ARG                                               \
-	{                                                    \
-		.name = "id", .type = "q", .direction = "in" \
-	}
+#define ID_ARG { .name = "id", .type = "q", .direction = "in" }
 
-#define PATH_ARG                                               \
-	{                                                      \
-		.name = "path", .type = "s", .direction = "in" \
-	}
+#define PATH_ARG { .name = "path", .type = "s", .direction = "in" }
 
-#define EXPR_ARG                                               \
-	{                                                      \
-		.name = "expr", .type = "s", .direction = "in" \
-	}
+#define EXPR_ARG { .name = "expr", .type = "s", .direction = "in" }
 
-#define FSAL_ARG                                               \
-	{                                                      \
-		.name = "fsal", .type = "s", .direction = "in" \
-	}
+#define FSAL_ARG { .name = "fsal", .type = "s", .direction = "in" }
 
-#define STAT_TYPE_ARG                                               \
-	{                                                           \
-		.name = "stat_type", .type = "s", .direction = "in" \
-	}
+#define STAT_TYPE_ARG { .name = "stat_type", .type = "s", .direction = "in" }
 
 /* Properties list helper macros
  */
 
-#define END_ARG_LIST             \
-	{                        \
-		NULL, NULL, NULL \
-	}
+#define END_ARG_LIST { NULL, NULL, NULL }
 
-#define END_PROPS_LIST                               \
-	{                                            \
-		NULL, DBUS_PROP_READ, "", NULL, NULL \
-	}
+#define END_PROPS_LIST { NULL, DBUS_PROP_READ, "", NULL, NULL }
 
 typedef enum {
 	DBUS_PROP_READ = 0,

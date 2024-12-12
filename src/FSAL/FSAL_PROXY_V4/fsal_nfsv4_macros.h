@@ -53,10 +53,7 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 #endif
 
-#define TIMEOUTRPC   \
-	{            \
-		2, 0 \
-	}
+#define TIMEOUTRPC { 2, 0 }
 
 #define PRINT_HANDLE(tag, handle)                                           \
 	do {                                                                \

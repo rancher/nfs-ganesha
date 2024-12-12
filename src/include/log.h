@@ -411,10 +411,11 @@ struct ratelimit_state {
 };
 bool _ratelimit(struct ratelimit_state *rs, int *missed);
 
-#define RATELIMIT_STATE_INIT(interval_init, burst_init)                        \
-	{                                                                      \
-		.mutex = PTHREAD_MUTEX_INITIALIZER, .interval = interval_init, \
-		.burst = burst_init,                                           \
+#define RATELIMIT_STATE_INIT(interval_init, burst_init) \
+	{                                               \
+		.mutex = PTHREAD_MUTEX_INITIALIZER,     \
+		.interval = interval_init,              \
+		.burst = burst_init,                    \
 	}
 
 #define DEFINE_RATELIMIT_STATE(name, interval_init, burst_init) \

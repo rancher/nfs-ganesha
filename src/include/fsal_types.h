@@ -965,17 +965,18 @@ struct fsal_fd {
 /* FSAL_FD_TEMP initializer, the work_mutex, io_work_cond, and fd_work_cond are
  * not initialized as these are never used with a FSAL_FD_TEMP.
  */
-#define FSAL_FD_INIT                                                                                          \
-	{                                                                                                     \
-		.openflags = FSAL_O_CLOSED, .fd_work = 0, .io_work = 0,                                       \
-		.want_read = 0, .want_write = 0,                                                              \
-		.fsal_export = op_ctx->fsal_export,                                                           \
-		.fd_lru = { NULL,                                                                             \
-			    NULL }, /* work_mutex unused for FSAL_FD_TEMP */                                  \
-			/* io_work_cond unused for FSAL_FD_TEMP */ /* fd_work_cond unused for FSAL_FD_TEMP */ \
-			.close_on_complete = false,                                                           \
-		.lru_reclaim = 0, .fd_type = FSAL_FD_TEMP                                                     \
-	}
+#define FSAL_FD_INIT                                                                            \
+	{ .openflags = FSAL_O_CLOSED,                                                           \
+	  .fd_work = 0,                                                                         \
+	  .io_work = 0,                                                                         \
+	  .want_read = 0,                                                                       \
+	  .want_write = 0,                                                                      \
+	  .fsal_export = op_ctx->fsal_export,                                                   \
+	  .fd_lru = { NULL, NULL }, /* work_mutex unused for FSAL_FD_TEMP */                    \
+	  /* io_work_cond unused for FSAL_FD_TEMP */ /* fd_work_cond unused for FSAL_FD_TEMP */ \
+	  .close_on_complete = false,                                                           \
+	  .lru_reclaim = 0,                                                                     \
+	  .fd_type = FSAL_FD_TEMP }
 
 static inline void init_fsal_fd(struct fsal_fd *fsal_fd,
 				enum fsal_fd_type fd_type,

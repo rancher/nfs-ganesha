@@ -3156,8 +3156,7 @@ struct fsal_pnfs_ds {
  *
  */
 
-struct fsal_ds_handle {
-};
+struct fsal_ds_handle {};
 
 /**
  * @brief Get a reference on a fsal object handle by export
