@@ -815,9 +815,12 @@ static inline int PTHREAD_mutex_trylock(pthread_mutex_t *mtx,
 	} while (0)
 
 /**
- * @brief Logging condtion variable signal
+ * @brief Logging condition variable signal
  *
- * @param[in,out] _cond The condition variable to destroy
+ * Shall unblock at least one of the threads that are blocked on the specified
+ * condition variable cond (if any threads are blocked on cond).
+ *
+ * @param[in,out] _cond The condition variable to signal
  */
 
 #define PTHREAD_COND_signal(_cond)                                          \
@@ -841,7 +844,10 @@ static inline int PTHREAD_mutex_trylock(pthread_mutex_t *mtx,
 /**
  * @brief Logging condition variable broadcast
  *
- * @param[in,out] _cond The condition variable to destroy
+ * Shall unblock all threads currently blocked on the specified condition
+ * variable cond.
+ *
+ * @param[in,out] _cond The condition variable to broadcast
  */
 
 #define PTHREAD_COND_broadcast(_cond)                                          \
