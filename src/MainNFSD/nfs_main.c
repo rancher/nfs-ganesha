@@ -378,34 +378,25 @@ int main(int argc, char *argv[])
 			dev_null_fd = open("/dev/null", O_RDWR);
 			if (dev_null_fd < 0)
 				LogFatal(COMPONENT_MAIN,
-					 "Could not open /dev/null: %d (%s)",
-					 errno, strerror(errno));
+					"Could not open /dev/null: %d (%s)",
+					errno, strerror(errno));
 
-			if (close(STDIN_FILENO) == -1)
-				LogEvent(COMPONENT_MAIN,
-					 "Error while closing stdin: %d (%s)",
-					 errno, strerror(errno));
-			else {
-				LogEvent(COMPONENT_MAIN, "stdin closed");
-				dup(dev_null_fd);
+			if (dup2(dev_null_fd, STDIN_FILENO) == -1) {
+				LogFatal(COMPONENT_MAIN,
+					"dup2 for stdin failed: %d (%s)",
+					errno, strerror(errno));
 			}
 
-			if (close(STDOUT_FILENO) == -1)
-				LogEvent(COMPONENT_MAIN,
-					 "Error while closing stdout: %d (%s)",
-					 errno, strerror(errno));
-			else {
-				LogEvent(COMPONENT_MAIN, "stdout closed");
-				dup(dev_null_fd);
+			if (dup2(dev_null_fd, STDOUT_FILENO) == -1) {
+				LogFatal(COMPONENT_MAIN,
+					"dup2 for stdout failed: %d (%s)",
+					errno, strerror(errno));
 			}
 
-			if (close(STDERR_FILENO) == -1)
-				LogEvent(COMPONENT_MAIN,
-					 "Error while closing stderr: %d (%s)",
-					 errno, strerror(errno));
-			else {
-				LogEvent(COMPONENT_MAIN, "stderr closed");
-				dup(dev_null_fd);
+			if (dup2(dev_null_fd, STDERR_FILENO) == -1) {
+				LogFatal(COMPONENT_MAIN,
+					"dup2 for stderr failed: %d (%s)",
+					errno, strerror(errno));
 			}
 
 			if (close(dev_null_fd) == -1)
