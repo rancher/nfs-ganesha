@@ -325,11 +325,11 @@ void nfs_metrics__nfs3_request(uint32_t proc, nsecs_elapsed_t request_time,
 {
 	const char *const version = "nfs3";
 	const char *const operation = nfsproc3_to_str(proc);
-	const char *const statusLabel = nfsstat3_to_str(nfs_status);
+	const char *const status_label = nfsstat3_to_str(nfs_status);
 
 	monitoring__dynamic_observe_nfs_request(operation, request_time,
-						version, statusLabel, export_id,
-						client_ip);
+				   version, status_label, export_id,
+				   client_ip);
 }
 #endif
 
@@ -339,11 +339,11 @@ void nfs_metrics__nfs4_request(uint32_t op, nsecs_elapsed_t request_time,
 {
 	const char *const version = "nfs4";
 	const char *const operation = nfsop4_to_str(op);
-	const char *const statusLabel = nfsstat4_to_str(status);
+	const char *const status_label = nfsstat4_to_str(status);
 
 	monitoring__dynamic_observe_nfs_request(operation, request_time,
-						version, statusLabel, export_id,
-						client_ip);
+				   version, status_label, export_id,
+				   client_ip);
 }
 
 void nfs_metrics__init(void)
