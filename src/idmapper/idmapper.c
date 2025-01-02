@@ -1197,6 +1197,48 @@ void reset_auth_stats(void)
 	PTHREAD_RWLOCK_unlock(&dns_auth_lock);
 }
 
+/* NFSv4 specific features: RPCSEC_GSS will
+		 * provide user like
+		 *
+		 * nfs/<host>
+		 * root/<host>
+		 * host/<host>
+		 * choice is made to map them to root based on config setting */
+bool is_root_principal(struct gsh_buffdesc *princbuff)
+{
+	static const char *KERBEROS_PRINCIPAL_NFS = "nfs/";
+	static const char *KERBEROS_PRINCIPAL_ROOT = "root/";
+	static const char *KERBEROS_PRINCIPAL_HOST = "host/";
+	const uint32_t root_kerberos_principal =
+		nfs_param.directory_services_param.root_kerberos_principal;
+
+	if (root_kerberos_principal & ROOT_KERBEROS_PRINCIPAL_NONE)
+		return false;
+
+	if (princbuff->len < 4)
+		return false;
+
+	if (root_kerberos_principal & ROOT_KERBEROS_PRINCIPAL_NFS &&
+	    !memcmp(princbuff->addr, KERBEROS_PRINCIPAL_NFS, 4)) {
+		return true;
+	}
+
+	if (princbuff->len < 5)
+		return false;
+
+	if (root_kerberos_principal & ROOT_KERBEROS_PRINCIPAL_ROOT &&
+	    !memcmp(princbuff->addr, KERBEROS_PRINCIPAL_ROOT, 5)) {
+		return true;
+	}
+
+	if (root_kerberos_principal & ROOT_KERBEROS_PRINCIPAL_HOST &&
+	    !memcmp(princbuff->addr, KERBEROS_PRINCIPAL_HOST, 5)) {
+		return true;
+	}
+
+	return false;
+}
+
 #ifdef _HAVE_GSSAPI
 #ifdef _MSPAC_SUPPORT
 /**
@@ -1258,18 +1300,9 @@ bool principal2uid(char *principal, uid_t *uid, gid_t *gid)
 	if (success)
 		return false;
 
-	if ((princbuff.len >= 4) && (!memcmp(princbuff.addr, "nfs/", 4) ||
-				     !memcmp(princbuff.addr, "root/", 5) ||
-				     !memcmp(princbuff.addr, "host/", 5))) {
-		/* NFSv4 specific features: RPCSEC_GSS will
-		 * provide user like
-		 *
-		 * nfs/<host>
-		 * root/<host>
-		 * host/<host>
-		 * choice is made to map them to root */
+	if (is_root_principal(&princbuff)) {
 		/* This is a "root" request made from the
-			 hostbased nfs principal, use root */
+		 * hostbased nfs principal, use root */
 		*uid = 0;
 		*gid = 0;
 		return true;

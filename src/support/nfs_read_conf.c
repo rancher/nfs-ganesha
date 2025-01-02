@@ -69,6 +69,19 @@ static struct config_item_list udp_listener_type[] = {
 	CONFIG_LIST_EOL
 };
 
+/**
+ * @brief host options for assigning root privileges
+ */
+
+static struct config_item_list root_kerberos_principal_options[] = {
+	CONFIG_LIST_TOK("none", ROOT_KERBEROS_PRINCIPAL_NONE),
+	CONFIG_LIST_TOK("nfs", ROOT_KERBEROS_PRINCIPAL_NFS),
+	CONFIG_LIST_TOK("root", ROOT_KERBEROS_PRINCIPAL_ROOT),
+	CONFIG_LIST_TOK("host", ROOT_KERBEROS_PRINCIPAL_HOST),
+	CONFIG_LIST_TOK("all", ROOT_KERBEROS_PRINCIPAL_ALL),
+	CONFIG_LIST_EOL
+};
+
 static struct config_item_list protocols[] = {
 	CONFIG_LIST_TOK("none", CORE_OPTION_NONE),
 #ifdef _USE_NFS3
@@ -419,6 +432,10 @@ static struct config_item directory_services_params[] = {
 		      directory_services_param, idmapped_user_time_validity),
 	CONF_ITEM_I64("Idmapped_Group_Time_Validity", -1, INT64_MAX, -1,
 		      directory_services_param, idmapped_group_time_validity),
+	CONF_ITEM_LIST("Root_Kerberos_Principal",
+		       ROOT_KERBEROS_PRINCIPAL_DEFAULT,
+		       root_kerberos_principal_options,
+		       directory_services_param, root_kerberos_principal),
 	CONF_ITEM_UI32("Cache_Users_Max_Count", 0, INT32_MAX, INT32_MAX,
 		       directory_services_param, cache_users_max_count),
 	CONF_ITEM_UI32("Cache_Groups_Max_Count", 0, INT32_MAX, INT32_MAX,

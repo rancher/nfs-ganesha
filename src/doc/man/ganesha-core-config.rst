@@ -413,6 +413,12 @@ Idmapped_Group_Time_Validity(int64, range -1 to INT64_MAX, default -1)
     The default value is -1, which indicates fallback to older config --
     "NFS_CORE_PARAM.Manage_Gids_Expiration", for backward compatibility.
 
+Root_Kerberos_Principal(enum list, values [none,nfs,root,host,all], default [all])
+    List of primary users/service name parts of the principal that should
+    be assigned root privilege.
+    Setting "all" will assign root privilege to all the options.
+    Setting "none" in the list will override the other options in the list.
+
 Cache_Users_Max_Count(uint32, range 0 to INT32_MAX, default INT32_MAX)
     Max number of cached idmapped users
 

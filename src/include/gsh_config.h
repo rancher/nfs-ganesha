@@ -230,6 +230,15 @@ typedef enum protos {
 #define UDP_LISTENER_MOUNT 0x00000002
 #define UDP_LISTENER_MASK (UDP_LISTENER_ALL | UDP_LISTENER_MOUNT)
 
+#define ROOT_KERBEROS_PRINCIPAL_NONE (1 << 0)
+#define ROOT_KERBEROS_PRINCIPAL_NFS (1 << 1)
+#define ROOT_KERBEROS_PRINCIPAL_ROOT (1 << 2)
+#define ROOT_KERBEROS_PRINCIPAL_HOST (1 << 3)
+#define ROOT_KERBEROS_PRINCIPAL_ALL                                   \
+	(ROOT_KERBEROS_PRINCIPAL_NFS | ROOT_KERBEROS_PRINCIPAL_ROOT | \
+	 ROOT_KERBEROS_PRINCIPAL_HOST)
+#define ROOT_KERBEROS_PRINCIPAL_DEFAULT ROOT_KERBEROS_PRINCIPAL_ALL
+
 #ifdef _USE_NFS_RDMA
 #define NFS_RDMA_ENABLE_FOR_NONE 0
 #define NFS_RDMA_ENABLE_FOR_NFSV3 0x00000001
@@ -691,6 +700,8 @@ typedef struct directory_services_param {
 	int64_t idmapped_user_time_validity;
 	/** Cache validity in seconds for idmapped group entries */
 	int64_t idmapped_group_time_validity;
+	/** Controls principals that will be assigned root privilege */
+	uint32_t root_kerberos_principal;
 	/** Max number of cached idmapped users */
 	uint32_t cache_users_max_count;
 	/** Max number of cached idmapped groups */
