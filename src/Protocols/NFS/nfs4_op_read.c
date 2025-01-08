@@ -48,6 +48,7 @@
 #include "fsal_pnfs.h"
 #include "server_stats.h"
 #include "export_mgr.h"
+#include "nfs_exports.h"
 #include "gsh_rpc.h"
 
 #include "gsh_lttng/gsh_lttng.h"
@@ -205,6 +206,29 @@ static void nfs4_complete_read_plus(struct nfs_resop4 *resp,
 	}
 }
 
+static fsal_status_t allow_read(struct fsal_obj_handle *obj,
+				uint32_t read_access_check_policy_to_check)
+{
+	const uint32_t read_access_check_policy = atomic_fetch_uint32_t(
+		&op_ctx->ctx_export->read_access_check_policy);
+	fsal_status_t ret = { 0, 0 };
+
+	if (read_access_check_policy & read_access_check_policy_to_check) {
+		ret = obj->obj_ops->test_access(obj, FSAL_READ_ACCESS, NULL,
+						NULL, true);
+
+		if (ret.major == ERR_FSAL_ACCESS) {
+			/* Test for execute permission */
+			ret = fsal_access(
+				obj, FSAL_MODE_MASK_SET(FSAL_X_OK) |
+					     FSAL_ACE4_MASK_SET(
+						     FSAL_ACE_PERM_EXECUTE));
+		}
+	}
+
+	return ret;
+}
+
 /**
  * @brief Callback for NFS4 read done
  *
@@ -222,6 +246,11 @@ static void nfs4_read_cb(struct fsal_obj_handle *obj, fsal_status_t ret,
 	/* Fixup FSAL_SHARE_DENIED status */
 	if (ret.major == ERR_FSAL_SHARE_DENIED)
 		ret = fsalstat(ERR_FSAL_LOCKED, 0);
+
+	if (!FSAL_IS_ERROR(ret)) {
+		/* Perform permission checks after the FSAL does the read */
+		ret = allow_read(obj, READ_ACCESS_CHECK_POLICY_POST);
+	}
 
 	/* Get result */
 	data->res_READ4->status = nfs4_Errno_status(ret);
@@ -669,17 +698,8 @@ static enum nfs_req_result nfs4_read(struct nfs_argop4 *op,
 		anonymous_started = true;
 	}
 
-	/* Need to permission check the read. */
-	fsal_status = obj->obj_ops->test_access(obj, FSAL_READ_ACCESS, NULL,
-						NULL, true);
-
-	if (fsal_status.major == ERR_FSAL_ACCESS) {
-		/* Test for execute permission */
-		fsal_status = fsal_access(
-			obj, FSAL_MODE_MASK_SET(FSAL_X_OK) |
-				     FSAL_ACE4_MASK_SET(FSAL_ACE_PERM_EXECUTE));
-	}
-
+	/* Perform permission checks before the FSAL does the read */
+	fsal_status = allow_read(obj, READ_ACCESS_CHECK_POLICY_PRE);
 	if (FSAL_IS_ERROR(fsal_status)) {
 		res_READ4->status = nfs4_Errno_status(fsal_status);
 		goto out;

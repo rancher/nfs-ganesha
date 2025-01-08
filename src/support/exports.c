@@ -1776,6 +1776,15 @@ struct config_item_list deleg_types[] = {
 	CONFIG_LIST_EOL
 };
 
+/**
+ * @brief read permission mode options
+ */
+static struct config_item_list read_access_check_policy_type[] = {
+	CONFIG_LIST_TOK("pre", READ_ACCESS_CHECK_POLICY_PRE),
+	CONFIG_LIST_TOK("post", READ_ACCESS_CHECK_POLICY_POST),
+	CONFIG_LIST_TOK("all", READ_ACCESS_CHECK_POLICY_ALL), CONFIG_LIST_EOL
+};
+
 #define CONF_EXPORT_PERMS(_struct_, _perms_)                                             \
 	/* Note: Access_Type defaults to None on purpose */                              \
 	CONF_ITEM_ENUM_BITS_SET(                                                         \
@@ -1991,6 +2000,10 @@ static struct config_item fsal_params[] = {
 		CONF_ITEM_FSID_SET("Filesystem_id", 666, 666, _struct_,        \
 				   filesystem_id, /* major.minor */            \
 				   EXPORT_OPTION_FSID_SET, options_set),       \
+		CONF_ITEM_LIST("Read_Access_Check_Policy",                     \
+			       READ_ACCESS_CHECK_POLICY_PRE,                   \
+			       read_access_check_policy_type, _struct_,        \
+			       read_access_check_policy),                      \
 		CONF_ITEM_STR("Tag", 1, MAXPATHLEN, NULL, _struct_, FS_tag),   \
 		CONF_ITEM_UI64("MaxOffsetWrite", 512, UINT64_MAX, INT64_MAX,   \
 			       _struct_, MaxOffsetWrite),                      \
@@ -2388,6 +2401,25 @@ err_out:
 	return -1;
 }
 
+const char *readable_read_access_check_policy(uint32_t read_access_check_policy)
+{
+	static const char *READABLE_READ_ACCESS_CHECK_POLICY_ALL = "all";
+	static const char *READABLE_READ_ACCESS_CHECK_POLICY_PRE = "pre";
+	static const char *READABLE_READ_ACCESS_CHECK_POLICY_POST = "post";
+	static const char *READABLE_READ_ACCESS_CHECK_POLICY_INVALID =
+		"none/invalid";
+	if (read_access_check_policy == READ_ACCESS_CHECK_POLICY_ALL)
+		return READABLE_READ_ACCESS_CHECK_POLICY_ALL;
+
+	if (read_access_check_policy & READ_ACCESS_CHECK_POLICY_PRE)
+		return READABLE_READ_ACCESS_CHECK_POLICY_PRE;
+
+	if (read_access_check_policy & READ_ACCESS_CHECK_POLICY_POST)
+		return READABLE_READ_ACCESS_CHECK_POLICY_POST;
+
+	return READABLE_READ_ACCESS_CHECK_POLICY_INVALID;
+}
+
 bool log_an_export(struct gsh_export *exp, void *state)
 {
 	struct log_exports_parms *lep = state;
@@ -2411,10 +2443,12 @@ bool log_an_export(struct gsh_export *exp, void *state)
 		DisplayLogComponentLevel(
 			COMPONENT_EXPORT, (char *)lep->file, lep->line,
 			lep->func, lep->level,
-			"%s%sExport %p %5d pseudo (%s) with path (%s) and tag (%s) perms (%s)",
+			"%s%sExport %p %5d pseudo (%s) with path (%s) and tag (%s) perms (%s) Read_Access_Check_Policy (%s)",
 			lep->tag ? lep->tag : "", lep->tag ? " " : "", exp,
 			exp->export_id, exp->cfg_pseudopath, exp->cfg_fullpath,
-			exp->FS_tag, perms);
+			exp->FS_tag, perms,
+			readable_read_access_check_policy(
+				exp->read_access_check_policy));
 	}
 
 	if (lep->clients)

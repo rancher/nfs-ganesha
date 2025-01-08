@@ -204,6 +204,17 @@ Filesystem_id(fsid, format is uint64.uint64, default unused)
 
     This option is not dynamically updateable.
 
+Read_Access_Check_Policy(enum, values [pre, post, all], default pre)
+    Whether to run permission check for read before sending the read to the
+    FSAL, after getting the read response from the FSAL, or both before and after.
+    This allows to optimize performance for failure flow by always
+    checking access before sending the read, or to optimize performance for
+    success path by storing access check result in the FSAL cache during the
+    read and perform the access check after the read (requires the FSAL
+    implementation to support it, so should only be used with supported FSALs).
+    It also allow to optimize for security by running permission check both
+    before and after.
+
 MaxRead (64*1024*1024)
     The maximum read size on this export
 

@@ -206,6 +206,11 @@ struct exportlist_client_entry {
 
 #define EXPORT_OPTION_PERM_UNUSED 0x08860000
 
+#define READ_ACCESS_CHECK_POLICY_PRE (1 << 0)
+#define READ_ACCESS_CHECK_POLICY_POST (1 << 1)
+#define READ_ACCESS_CHECK_POLICY_ALL \
+	(READ_ACCESS_CHECK_POLICY_PRE | READ_ACCESS_CHECK_POLICY_POST)
+
 /* Export list related functions */
 uid_t get_anonymous_uid(void);
 gid_t get_anonymous_gid(void);
