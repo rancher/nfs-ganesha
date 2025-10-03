@@ -117,7 +117,7 @@ static inline void dynamic_metrics__observe_nfs_request(
 static inline void dynamic_metrics__observe_nfs_io(
 	size_t UNUSED(bytes_requested), size_t UNUSED(bytes_transferred),
 	bool UNUSED(is_write), export_id_t UNUSED(export_id),
-	const char *UNUSED(client_ip))
+	const char *UNUSED(path), const char *UNUSED(client_ip))
 {
 }
 
