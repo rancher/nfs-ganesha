@@ -612,7 +612,7 @@ static int read_clids(char *response, add_clid_entry_hook add_clid_entry)
 		}
 
 		clid = json_object_get_string(obj);
-		ent = add_clid_entry((char *)clid);
+		ent = add_clid_entry((char *)clid, true);
 		LogEvent(COMPONENT_CLIENTID, "Added %s to clid list", ent->cl_name);
 	}
 
