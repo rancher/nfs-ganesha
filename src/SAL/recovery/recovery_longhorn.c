@@ -377,7 +377,8 @@ static void longhorn_create_clid_name(nfs_client_id_t *clientid)
 			     cidstr_lenx_len;
 
 		/* hold both long form clientid and IP */
-		clientid->cid_recov_tag = gsh_malloc(total_size);
+		clientid->cid_recov_tag = gsh_malloc(total_size,
+						     MEM_COMP_RECOVERY);
 
 		/* Can't overrun and shouldn't return EOVERFLOW or EINVAL */
 		(void) snprintf(clientid->cid_recov_tag, total_size,
@@ -552,7 +553,7 @@ static void longhorn_rm_clid(nfs_client_id_t *clientid)
 		clientid->cid_recov_tag, strlen(clientid->cid_recov_tag));
 	assert(encoded_cid_recov_tag != NULL);
 
-	gsh_free(clientid->cid_recov_tag);
+	gsh_free(clientid->cid_recov_tag, MEM_COMP_RECOVERY);
 	clientid->cid_recov_tag = NULL;
 
 	LogEvent(COMPONENT_CLIENTID,
@@ -578,7 +579,7 @@ static void longhorn_rm_clid(nfs_client_id_t *clientid)
 	curl_easy_cleanup(curl);
 }
 
-static int read_clids(char *response, add_clid_entry_hook add_clid_entry)
+static int read_clids(char *response)
 {
 	struct json_object *obj = NULL, *clients_obj = NULL;
 	size_t num_clids = 0;
@@ -612,7 +613,7 @@ static int read_clids(char *response, add_clid_entry_hook add_clid_entry)
 		}
 
 		clid = json_object_get_string(obj);
-		ent = add_clid_entry((char *)clid, true);
+		ent = nfs4_add_clid_entry((char *)clid, true);
 		LogEvent(COMPONENT_CLIENTID, "Added %s to clid list", ent->cl_name);
 	}
 
@@ -622,9 +623,7 @@ end:
 	return error;
 }
 
-static void longhorn_read_recov_clids(nfs_grace_start_t *gsp,
-				  add_clid_entry_hook add_clid_entry,
-				  add_rfh_entry_hook add_rfh_entry)
+static void longhorn_read_recov_clids(nfs_grace_start_t *gsp)
 {
 	char host[NI_MAXHOST];
 	char url[URL_MAX];
@@ -656,7 +655,7 @@ static void longhorn_read_recov_clids(nfs_grace_start_t *gsp,
 		return;
 	}
 
-	read_clids(response, add_clid_entry);
+	read_clids(response);
 	free(response);
 }
 
