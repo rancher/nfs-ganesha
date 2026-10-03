@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <string.h>
+#include <time.h>
 #include <netdb.h>
 #include "bsd-base64.h"
 #include "client_mgr.h"
@@ -40,6 +41,9 @@
 #define URL_MAX       2048
 #define PAYLOAD_MAX   2048
 #define LONGHORN_RECOVERY_BACKEND_URL "http://longhorn-recovery-backend:9503/v1/recoverybackend"
+#define HTTP_CONNECT_ATTEMPTS 10
+#define HTTP_CONNECT_RETRY_WAIT_MS 100
+#define HTTP_CONNECT_RETRY_MAX_WAIT_MS 1000
 
 static char recov_version[NAME_MAX];
 static pthread_rwlock_t recov_lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -104,6 +108,9 @@ static int http_call(HTTP_METHOD method, const char *url, char *payload, size_t 
 	struct curl_slist *curl_headers = NULL;
 	char *encoded_url = NULL;
 	long http_code = 0;
+	int retry_wait_ms = HTTP_CONNECT_RETRY_WAIT_MS;
+	int attempt = 0;
+	struct timespec wait;
 
 	if (method < HTTP_GET || method > HTTP_DELETE) {
 		LogEvent(COMPONENT_CLIENTID, "Invalid method: %d", method);
@@ -234,8 +241,26 @@ static int http_call(HTTP_METHOD method, const char *url, char *payload, size_t 
 		goto error;
 	}
 
-	/* Make HTTP request */
-	curl_result = curl_easy_perform(handle);
+	/* Make HTTP request. If the connection cannot be established, the
+	 * request has not been sent and is retried. This happens e.g. while
+	 * the network policy for a new share manager pod is not programmed yet.
+	 */
+	for (attempt = 1; ; attempt++) {
+		curl_result = curl_easy_perform(handle);
+		if (curl_result != CURLE_COULDNT_CONNECT ||
+		    attempt >= HTTP_CONNECT_ATTEMPTS)
+			break;
+
+		LogEvent(COMPONENT_CLIENTID,
+			 "Failed to connect to %s (attempt %d/%d), retrying in %d ms",
+			 url, attempt, HTTP_CONNECT_ATTEMPTS, retry_wait_ms);
+		wait.tv_sec = retry_wait_ms / 1000;
+		wait.tv_nsec = (retry_wait_ms % 1000) * 1000000L;
+		nanosleep(&wait, NULL);
+		retry_wait_ms *= 2;
+		if (retry_wait_ms > HTTP_CONNECT_RETRY_MAX_WAIT_MS)
+			retry_wait_ms = HTTP_CONNECT_RETRY_MAX_WAIT_MS;
+	}
 	if (curl_result != CURLE_OK) {
 		LogEvent(COMPONENT_CLIENTID, "Failed to perform CURL operation: %s", curl_easy_strerror(curl_result));
 		goto error;
